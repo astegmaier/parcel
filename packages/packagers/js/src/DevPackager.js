@@ -68,6 +68,11 @@ export class DevPackager {
         if (resolved && resolved.type !== 'js') {
           // if this is a reference to another javascript asset, we should not include
           // its output, as its contents should already be loaded.
+          console.log(
+            node.value.sourcePath,
+            node.value.specifier,
+            resolved.filePath,
+          );
           invariant(!this.bundle.hasAsset(resolved));
           wrapped +=
             JSON.stringify(this.bundleGraph.getAssetPublicId(resolved)) +
