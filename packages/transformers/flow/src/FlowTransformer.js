@@ -52,12 +52,6 @@ export default (new Transformer({
       all: asset.filePath.includes('node_modules/react-native/'),
     }).toString();
 
-    // https://github.com/facebook/flow/issues/8725
-    // in node_modules/react-native/Libraries/Components/DatePickerAndroid/DatePickerAndroid.android.js
-    if (result.includes('static +')) {
-      result = result.replace(/static \+/g, 'static ');
-    }
-
     asset.setCode(result);
 
     return [asset];
