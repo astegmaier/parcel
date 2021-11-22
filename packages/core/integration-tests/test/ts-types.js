@@ -334,12 +334,12 @@ describe('typescript types', function () {
 
     assertBundles(b, [
       {
-        name: 'index.js',
+        name: 'main.js',
         type: 'js',
         assets: ['index.ts', 'other.ts'],
       },
       {
-        name: 'index.d.ts',
+        name: 'types.d.ts',
         type: 'ts',
         assets: ['index.ts'],
       },
