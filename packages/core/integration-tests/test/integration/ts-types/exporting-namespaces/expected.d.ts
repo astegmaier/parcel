@@ -1,4 +1,4 @@
-declare module "MyNamespace" {
+export namespace MyNamespace {
     export interface TestInterface {
         foo: number;
         bar: boolean;
@@ -6,11 +6,9 @@ declare module "MyNamespace" {
     export const testNumber: number;
     export const testString: string;
     export class TestClass {
-        a: string
-        b: number
+        a: string;
+        b: number;
+        constructor();
     }
 }
-
-export const MyNamespace: import("MyNamespace");
-
-//# sourceMappingURL=types.d.ts.map
+//# sourceMappingURL=index.d.ts.map
