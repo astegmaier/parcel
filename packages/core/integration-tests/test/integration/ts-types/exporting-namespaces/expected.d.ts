@@ -11,4 +11,5 @@ export namespace MyNamespace {
         constructor();
     }
 }
-//# sourceMappingURL=index.d.ts.map
+
+//# sourceMappingURL=types.d.ts.map
