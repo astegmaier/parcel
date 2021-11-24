@@ -51,6 +51,22 @@ export function shake(
         addedGeneratedImports = true;
       }
 
+      const namespaceExportName = moduleGraph.getModuleNamespaceExportName(
+        node.name.text,
+      );
+      if (namespaceExportName) {
+        // When namespaceExportName is defined, that means there was an "export * as namespaceName from 'moduleName'"" statement elsewhere.
+        // (where where "moduleName" is _this_ module). We want to output `export namespace namespaceName { /* module definition */ }` at the top level.
+        const namespaceExport = ts.createModuleDeclaration(
+          undefined, // decorators
+          ts.createModifiersFromModifierFlags(ts.ModifierFlags.Export), // modifiers
+          namespaceExportName, // name
+          node.body, // body
+          ts.NodeFlags.Namespace, // flags
+        );
+        statements.push(namespaceExport);
+      }
+
       return statements;
     }
 

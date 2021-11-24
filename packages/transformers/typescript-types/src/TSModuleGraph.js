@@ -4,14 +4,17 @@ import type {TSModule, Export} from './TSModule';
 import nullthrows from 'nullthrows';
 import invariant from 'assert';
 import ts from 'typescript';
+import type {Identifier} from 'typescript';
 
 export class TSModuleGraph {
   modules: Map<string, TSModule>;
+  moduleNamespaceExports: Map<string, Identifier>;
   mainModuleName: string;
   mainModule: ?TSModule;
 
   constructor(mainModuleName: string) {
     this.modules = new Map();
+    this.moduleNamespaceExports = new Map();
     this.mainModuleName = mainModuleName;
     this.mainModule = null;
   }
@@ -21,6 +24,16 @@ export class TSModuleGraph {
     if (name === this.mainModuleName) {
       this.mainModule = module;
     }
+  }
+
+  /** Marks a module block ("declare module 'moduleName'") as something that should be exported at the top-level using "export namespace namespaceName { } " */
+  addModuleNamespaceExport(moduleName: string, exportIdentifier: Identifier) {
+    this.moduleNamespaceExports.set(moduleName, exportIdentifier);
+  }
+
+  /** Checks whether a module block should be exported as a namespace and, if it should, what the namespace should be called.  */
+  getModuleNamespaceExportName(moduleName: string): ?Identifier {
+    return this.moduleNamespaceExports.get(moduleName);
   }
 
   getModule(name: string): ?TSModule {

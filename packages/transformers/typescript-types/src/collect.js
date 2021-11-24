@@ -61,18 +61,29 @@ export function collect(
 
     if (ts.isExportDeclaration(node)) {
       if (node.exportClause) {
-        for (let element of node.exportClause.elements) {
-          if (node.moduleSpecifier) {
-            currentModule.addExport(
-              element.name.text,
-              (element.propertyName ?? element.name).text,
-              node.moduleSpecifier.text,
-            );
-          } else {
-            currentModule.addExport(
-              element.name.text,
-              (element.propertyName ?? element.name).text,
-            );
+        // Statements within a module of the form "export * as namespaceName from 'moduleName'"" (e.g. "namespace exports"),
+        // need to be changed to `export namespace namespaceName { /* module definition */ }` when they are moved to the top level.
+        // We mark them here so that during the "shake" pass we can do this transformation as we visit the module definition.
+        // $FlowFixMe - "isNamespaceExport" was added in Typescript 3.8 and is not present in the current flow definitions.
+        if (ts.isNamespaceExport(node.exportClause)) {
+          moduleGraph.addModuleNamespaceExport(
+            node.moduleSpecifier.text,
+            node.exportClause.name,
+          );
+        } else {
+          for (let element of node.exportClause.elements) {
+            if (node.moduleSpecifier) {
+              currentModule.addExport(
+                element.name.text,
+                (element.propertyName ?? element.name).text,
+                node.moduleSpecifier.text,
+              );
+            } else {
+              currentModule.addExport(
+                element.name.text,
+                (element.propertyName ?? element.name).text,
+              );
+            }
           }
         }
       } else {
