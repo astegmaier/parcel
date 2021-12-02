@@ -1,3 +1,8 @@
+declare class TestClass {
+    a: string;
+    b: number;
+    constructor();
+}
 export namespace MyNamespace {
     export interface TestInterface {
         foo: number;
@@ -11,5 +16,6 @@ export namespace MyNamespace {
         constructor();
     }
 }
+export const testInstance: TestClass;
 
 //# sourceMappingURL=types.d.ts.map
