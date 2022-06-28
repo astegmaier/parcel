@@ -72,9 +72,30 @@ export function shake(
     }
 
     let currentModule = nullthrows(_currentModule);
-    // Remove exports from flattened modules
     if (ts.isExportDeclaration(node)) {
-      if (
+      // Convert namespace exports to "export namespace" syntax, e.g.:
+      //     export * as foo from 'bar'
+      //     ...becomes...
+      //     export namespace foo { /* contents of 'bar' */}
+      // $FlowFixMe[prop-missing] - "isNamespaceExport" was added in Typescript 3.8 and is not present in the current flow definitions.
+      if (node.exportClause && ts.isNamespaceExport(node.exportClause)) {
+        // TODO: handle cases where the namespace export is not actually a top-level export (by ignoring it)
+        // TODO: how to handle cases where part of a namespace export is used somehwere else?
+        // TODO: can we de-dupe the case where part of the namespace is _also_ a top-level export?
+        // TODO: what is the right way to "shake" the contents of "bar" similar to the rest of the system?
+        let referencedModule = moduleGraph.getModule(node.moduleSpecifier.text);
+        // TODO: maybe use modifyModuleDeclaration?
+        if (referencedModule) {
+          return ts.createModuleDeclaration(
+            undefined, // decorators
+            ts.createModifiersFromModifierFlags(ts.ModifierFlags.Export), // modifiers
+            node.exportClause.name, // name
+            referencedModule.node.body, // body
+            ts.NodeFlags.Namespace, // flags
+          );
+        }
+        // Remove exports from flattened modules
+      } else if (
         !node.moduleSpecifier ||
         moduleGraph.getModule(node.moduleSpecifier.text)
       ) {

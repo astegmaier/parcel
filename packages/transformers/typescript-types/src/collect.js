@@ -22,7 +22,7 @@ export function collect(
 
     if (ts.isModuleDeclaration(node)) {
       moduleStack.push(_currentModule);
-      _currentModule = new TSModule();
+      _currentModule = new TSModule(node);
       moduleGraph.addModule(node.name.text, _currentModule);
     }
 
@@ -61,18 +61,26 @@ export function collect(
 
     if (ts.isExportDeclaration(node)) {
       if (node.exportClause) {
-        for (let element of node.exportClause.elements) {
-          if (node.moduleSpecifier) {
-            currentModule.addExport(
-              element.name.text,
-              (element.propertyName ?? element.name).text,
-              node.moduleSpecifier.text,
-            );
-          } else {
-            currentModule.addExport(
-              element.name.text,
-              (element.propertyName ?? element.name).text,
-            );
+        // $FlowFixMe[prop-missing] - "isNamespaceExport" was added in Typescript 3.8 and is not present in the current flow definitions.
+        if (ts.isNamespaceExport(node.exportClause)) {
+          currentModule.addNamespaceExport(
+            node.exportClause.name.text,
+            node.moduleSpecifier.text,
+          );
+        } else {
+          for (let element of node.exportClause.elements) {
+            if (node.moduleSpecifier) {
+              currentModule.addExport(
+                element.name.text,
+                (element.propertyName ?? element.name).text,
+                node.moduleSpecifier.text,
+              );
+            } else {
+              currentModule.addExport(
+                element.name.text,
+                (element.propertyName ?? element.name).text,
+              );
+            }
           }
         }
       } else {

@@ -11,13 +11,19 @@ export class TSModule {
   bindings: Map<string, Set<any>>;
   names: Map<string, string>;
   used: Set<string>;
+  /** export * as name from "specifier" => Map<name, specifier> */
+  namespaceExports: Map<string, string>;
+  /** The raw module contents */
+  node: any;
 
-  constructor() {
+  constructor(node: any) {
     this.imports = new Map();
     this.exports = [];
     this.bindings = new Map();
     this.names = new Map();
     this.used = new Set();
+    this.namespaceExports = new Map();
+    this.node = node;
   }
 
   addImport(local: string, specifier: string, imported: string) {
@@ -30,6 +36,10 @@ export class TSModule {
   // if not a reexport: imported = local, name = exported
   addExport(name: string, imported: string, specifier: ?string) {
     this.exports.push({name, specifier, imported});
+  }
+
+  addNamespaceExport(name: string, specifier: string) {
+    this.namespaceExports.set(name, specifier);
   }
 
   addWildcardExport(specifier: string) {
