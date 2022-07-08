@@ -1,9 +1,4 @@
-declare class TestClass {
-  a: string;
-  b: number;
-  constructor();
-}
-export namespace MyNamespace {
+export namespace StuffNamespaceRoot {
   export interface TestInterface {
       foo: number;
       bar: boolean;
@@ -16,6 +11,7 @@ export namespace MyNamespace {
       constructor();
   }
 }
-export const testInstance: TestClass;
+export { StuffNamespace as StuffNamespaceReexport };
+export const testInstance: StuffNamespaceRoot.TestClass;
 
 //# sourceMappingURL=types.d.ts.map

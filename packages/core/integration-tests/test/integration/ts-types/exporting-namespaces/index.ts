@@ -1,5 +1,6 @@
-export * as MyNamespace from './other';
+export * as StuffNamespaceRoot from './stuff';
 
-import { TestClass } from "./other"
+import { StuffNamespaceReexport } from "./re-exporter"
+export { StuffNamespaceInternal } from "./internal-exporter"
 
-export const testInstance: TestClass = new MyNamespace.TestClass();
+export const testInstance = new StuffNamespaceInternal.TestClass();
