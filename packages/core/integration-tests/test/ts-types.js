@@ -423,7 +423,12 @@ describe('typescript types', function () {
       {
         name: 'main.js',
         type: 'js',
-        assets: ['index.ts', 'other.ts'],
+        assets: [
+          'index.ts',
+          'internal-exporter.ts',
+          're-exporter.ts',
+          'stuff.ts',
+        ],
       },
       {
         name: 'types.d.ts',
