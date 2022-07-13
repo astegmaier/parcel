@@ -11,7 +11,7 @@ export namespace StuffNamespaceRoot {
         constructor();
     }
 }
-export { StuffNamespace as StuffNamespaceReexportRenamed };
+export { StuffNamespaceRoot as StuffNamespaceReexportedRenamed };
 export const testInstance: StuffNamespaceRoot.TestClass;
 
 //# sourceMappingURL=types.d.ts.map
