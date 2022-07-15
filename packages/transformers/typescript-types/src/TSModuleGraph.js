@@ -75,7 +75,12 @@ export class TSModuleGraph {
   getExport(
     m: TSModule,
     e: Export,
-  ): ?{|imported: string, module: TSModule, name: string|} {
+  ): ?{|
+    imported: string,
+    module: TSModule,
+    name: string,
+    namespaceModule?: TSModule,
+  |} {
     invariant(e.name != null);
     let exportName = e.name;
 
@@ -93,8 +98,10 @@ export class TSModuleGraph {
 
       return {
         module: exp.module,
-        imported: exp.imported || exp.name,
+        imported: exp.imported || exp.name, // TODO: is there a bug here?
         name: exportName,
+        // TODO: Do we need to do something special here to handle external exports?
+        namespaceModule: exp.namespaceModule,
       };
     }
 
@@ -113,6 +120,10 @@ export class TSModuleGraph {
       module: m,
       name: exportName,
       imported: e.imported != null ? m.getName(e.imported) : exportName,
+      // TODO: this will throw if we do a namespace export of an external module. Need to implement.
+      namespaceModule: e.isNamespaceExport
+        ? nullthrows(this.getModule(e.specifier))
+        : undefined,
     };
   }
 
@@ -120,7 +131,12 @@ export class TSModuleGraph {
     module: TSModule,
     local: string,
     imported?: string,
-  ): ?{|imported: string, module: TSModule, name: string|} {
+  ): ?{|
+    imported: string,
+    module: TSModule,
+    name: string,
+    namespaceModule?: TSModule,
+  |} {
     let i = module.imports.get(local);
     if (!i) {
       return null;
@@ -138,9 +154,15 @@ export class TSModuleGraph {
   resolveExport(
     module: TSModule,
     name: string,
-  ): ?{|imported: string, module: TSModule, name: string|} {
+  ): ?{|
+    imported: string,
+    module: TSModule,
+    name: string,
+    namespaceModule?: TSModule,
+  |} {
     for (let e of module.exports) {
-      if (e.name === name) {
+      // TODO: what if one file has multiple namespace exports?
+      if (e.name === name || e.isNamespaceExport) {
         return this.getExport(module, e);
       } else if (e.specifier) {
         const m = this.resolveExport(
@@ -157,7 +179,12 @@ export class TSModuleGraph {
   getAllExports(
     module: TSModule = nullthrows(this.mainModule),
     excludeDefault: boolean = false,
-  ): Array<{|imported: string, module: TSModule, name: string|}> {
+  ): Array<{|
+    imported: string,
+    module: TSModule,
+    name: string,
+    namespaceModule?: TSModule,
+  |}> {
     let res = [];
     for (let e of module.exports) {
       if (e.name && (!excludeDefault || e.name !== 'default')) {
@@ -205,6 +232,16 @@ export class TSModuleGraph {
       e.module.names.set(e.imported, e.name);
       names[e.name] = 1;
       exportedNames.set(e.name, e.module);
+      const {namespaceModule} = e;
+      if (namespaceModule) {
+        namespaceModule.namespaceNames.add(e.name);
+        namespaceModule.exports.forEach(({name}) => {
+          // TODO: what is the right way to do this for wildcard exports (export * from 'foo'), and nested namespace exports?
+          if (name) {
+            namespaceModule.used.add(name);
+          }
+        });
+      }
     }
 
     let importedSymbolsToUpdate = [];

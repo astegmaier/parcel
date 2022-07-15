@@ -51,7 +51,12 @@ export function shake(
       moduleStack.push(_currentModule);
       let isFirstModule = !_currentModule;
       _currentModule = moduleGraph.getModule(node.name.text);
-      let statements = ts.visitEachChild(node, visit, context).body.statements;
+
+      const visitedModuleContents = ts.visitEachChild(node, visit, context);
+      const statements =
+        getNamespaceExportsAndAliases(_currentModule, visitedModuleContents) ??
+        visitedModuleContents.body.statements;
+
       _currentModule = moduleStack.pop();
 
       if (isFirstModule && !addedGeneratedImports) {
@@ -136,8 +141,14 @@ export function shake(
         node.name = ts.createIdentifier(newName);
       }
 
-      // Export declarations that should be exported
-      if (exportedNames.get(newName) === currentModule) {
+      // Export declarations that should be exported, including from a namespace.
+      const isExportedFromNamespace =
+        currentModule.namespaceNames.size > 0 &&
+        currentModule.exports.some(({name}) => name === newName);
+      if (
+        exportedNames.get(newName) === currentModule ||
+        isExportedFromNamespace
+      ) {
         if (newName === 'default') {
           node.modifiers.unshift(
             ts.createModifier(ts.SyntaxKind.DefaultKeyword),
@@ -168,9 +179,12 @@ export function shake(
           m.kind !== ts.SyntaxKind.DeclareKeyword,
       );
 
-      // Add export modifier if all declarations are exported.
+      // Add export modifier if all declarations are exported, or if the declaration was exported from a namespace.
       let isExported = node.declarationList.declarations.every(
-        d => exportedNames.get(d.name.text) === currentModule,
+        d =>
+          exportedNames.get(d.name.text) === currentModule ||
+          (currentModule.namespaceNames.size > 0 &&
+            currentModule.exports.some(({name}) => name === d.name.text)),
       );
       if (isExported) {
         node.modifiers.unshift(ts.createModifier(ts.SyntaxKind.ExportKeyword));
@@ -204,7 +218,16 @@ export function shake(
         node.left.text,
         node.right.text,
       );
-      if (resolved && resolved.module.hasBinding(resolved.name)) {
+      const namespaceName = resolved?.namespaceModule?.namespaceNames
+        .values()
+        .next().value;
+      if (namespaceName) {
+        return ts.updateQualifiedName(
+          node,
+          ts.createIdentifier(namespaceName),
+          node.right,
+        );
+      } else if (resolved && resolved.module.hasBinding(resolved.name)) {
         return ts.createIdentifier(resolved.name);
       } else {
         return ts.updateQualifiedName(
@@ -292,4 +315,50 @@ function generateImports(moduleGraph: TSModuleGraph) {
   }
 
   return importStatements;
+}
+
+function getNamespaceExportsAndAliases(
+  m: ?TSModule,
+  visitedModuleDeclaration: any,
+): any {
+  if (m && m.namespaceNames.size > 0) {
+    const namespaceDeclarationsAndAliases = [];
+    let primaryNamespaceName: string;
+    for (const namespaceName of m.namespaceNames) {
+      // The first namespace name contains the contents of the namespaced module.
+      if (namespaceDeclarationsAndAliases.length === 0) {
+        primaryNamespaceName = namespaceName;
+        namespaceDeclarationsAndAliases.push(
+          ts.createModuleDeclaration(
+            undefined, // decorators
+            ts.createModifiersFromModifierFlags(ts.ModifierFlags.Export), // modifiers
+            ts.createIdentifier(namespaceName), // name
+            ts.createModuleBlock(visitedModuleDeclaration.body.statements), // body
+            ts.NodeFlags.Namespace, // flags
+          ),
+        );
+      }
+      // Subsequent exported namespace names are "aliases" - e.g. export { MainNamespaceName as NamespaceAlias };
+      else {
+        namespaceDeclarationsAndAliases.push(
+          ts.createExportDeclaration(
+            undefined,
+            undefined,
+            ts.createNamedExports([
+              // TODO: this has a 2 argument signature in TS 3.3 (flow definitions), but a 3 argument signature in recent versions of TS
+              // prettier-ignore
+              // $FlowFixMe[incompatible-call]
+              // $FlowFixMe[extra-arg]
+              ts.createExportSpecifier(false, primaryNamespaceName, namespaceName),
+            ]),
+            undefined,
+          ),
+        );
+      }
+    }
+    if (namespaceDeclarationsAndAliases.length > 0) {
+      return namespaceDeclarationsAndAliases;
+    }
+  }
+  return null;
 }

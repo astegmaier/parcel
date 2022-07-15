@@ -411,7 +411,7 @@ describe('typescript types', function () {
     assert.equal(dist, expected);
   });
 
-  it.skip('should generate ts declarations with namespace exports', async function () {
+  it('should generate ts declarations with namespace exports', async function () {
     let b = await bundle(
       path.join(
         __dirname,

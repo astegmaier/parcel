@@ -3,7 +3,8 @@
 export type Import = {|specifier: string, imported: string|};
 export type Export =
   | {|name: string, imported: string, specifier?: ?string|}
-  | {|specifier: string|};
+  | {|specifier: string|}
+  | {|name: string, specifier: string, isNamespaceExport: true|};
 
 export class TSModule {
   imports: Map<string, Import>;
@@ -11,6 +12,7 @@ export class TSModule {
   bindings: Map<string, Set<any>>;
   names: Map<string, string>;
   used: Set<string>;
+  namespaceNames: Set<string>;
 
   constructor() {
     this.imports = new Map();
@@ -18,6 +20,7 @@ export class TSModule {
     this.bindings = new Map();
     this.names = new Map();
     this.used = new Set();
+    this.namespaceNames = new Set();
   }
 
   addImport(local: string, specifier: string, imported: string) {
@@ -34,6 +37,10 @@ export class TSModule {
 
   addWildcardExport(specifier: string) {
     this.exports.push({specifier});
+  }
+
+  addNamespaceExport(name: string, specifier: string) {
+    this.exports.push({name, specifier, isNamespaceExport: true});
   }
 
   addLocal(name: string, node: any) {

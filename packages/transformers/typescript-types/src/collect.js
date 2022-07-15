@@ -61,18 +61,30 @@ export function collect(
 
     if (ts.isExportDeclaration(node)) {
       if (node.exportClause) {
-        for (let element of node.exportClause.elements) {
-          if (node.moduleSpecifier) {
-            currentModule.addExport(
-              element.name.text,
-              (element.propertyName ?? element.name).text,
-              node.moduleSpecifier.text,
-            );
-          } else {
-            currentModule.addExport(
-              element.name.text,
-              (element.propertyName ?? element.name).text,
-            );
+        if (
+          // $FlowFixMe[prop-missing] - "isNamespaceExport" was added in Typescript 3.8 and is not present in the current flow definitions.
+          typeof ts.isNamespaceExport === 'function' &&
+          ts.isNamespaceExport(node.exportClause)
+        ) {
+          // TODO: could there be multiple export clauses in a namespace export?
+          currentModule.addNamespaceExport(
+            node.exportClause.name.text,
+            node.moduleSpecifier.text,
+          );
+        } else {
+          for (let element of node.exportClause.elements) {
+            if (node.moduleSpecifier) {
+              currentModule.addExport(
+                element.name.text,
+                (element.propertyName ?? element.name).text,
+                node.moduleSpecifier.text,
+              );
+            } else {
+              currentModule.addExport(
+                element.name.text,
+                (element.propertyName ?? element.name).text,
+              );
+            }
           }
         }
       } else {
