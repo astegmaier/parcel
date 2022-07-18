@@ -148,12 +148,13 @@ export class TSModuleGraph {
       return {module, name: local, imported: imported || i.imported};
     }
 
-    return this.resolveExport(m, imported || i.imported);
+    return this.resolveExport(m, imported || i.imported, i.imported);
   }
 
   resolveExport(
     module: TSModule,
     name: string,
+    namespace?: string,
   ): ?{|
     imported: string,
     module: TSModule,
@@ -161,8 +162,7 @@ export class TSModuleGraph {
     namespaceModule?: TSModule,
   |} {
     for (let e of module.exports) {
-      // TODO: what if one file has multiple namespace exports?
-      if (e.name === name || e.isNamespaceExport) {
+      if (e.name === name || (e.isNamespaceExport && e.name === namespace)) {
         return this.getExport(module, e);
       } else if (e.specifier) {
         const m = this.resolveExport(

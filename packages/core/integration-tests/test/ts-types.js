@@ -430,6 +430,7 @@ describe('typescript types', function () {
           'other2.ts',
           're-exporter.ts',
           'stuff.ts',
+          'stuff2.ts',
         ],
       },
       {

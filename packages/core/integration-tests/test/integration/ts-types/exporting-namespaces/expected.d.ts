@@ -15,6 +15,9 @@ export namespace StuffNamespaceRoot {
     }
 }
 export { StuffNamespaceRoot as StuffNamespaceReexportedRenamed };
+export namespace Stuff2NamespaceReexportedRenamed {
+    export const testBoolean: boolean;
+}
 export const testInstance: StuffNamespaceRoot.TestClass;
 
 //# sourceMappingURL=types.d.ts.map
