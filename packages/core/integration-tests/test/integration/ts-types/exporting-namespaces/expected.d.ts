@@ -1,4 +1,7 @@
+declare function _log1(message: string): void;
+declare function xyz(message: number): void;
 export namespace StuffNamespaceRoot {
+    export function log(f: typeof _log1 | typeof xyz): void;
     export interface TestInterface {
         foo: number;
         bar: boolean;

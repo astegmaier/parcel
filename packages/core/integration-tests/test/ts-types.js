@@ -426,6 +426,8 @@ describe('typescript types', function () {
         assets: [
           'index.ts',
           'internal-exporter.ts',
+          'other1.ts',
+          'other2.ts',
           're-exporter.ts',
           'stuff.ts',
         ],

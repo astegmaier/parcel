@@ -226,21 +226,24 @@ export class TSModuleGraph {
   propagate(context: any): Map<string, TSModule> {
     // Resolve all exported values, and mark them as used.
     let names = Object.create(null);
+    let exportedNamespaceScopedNames = Object.create(null);
     let exportedNames = new Map<string, TSModule>();
     for (let e of this.getAllExports()) {
       this.markUsed(e.module, e.imported, context);
       e.module.names.set(e.imported, e.name);
       names[e.name] = 1;
       exportedNames.set(e.name, e.module);
+
       const {namespaceModule} = e;
       if (namespaceModule) {
         namespaceModule.namespaceNames.add(e.name);
-        namespaceModule.exports.forEach(({name}) => {
-          // TODO: what is the right way to do this for wildcard exports (export * from 'foo'), and nested namespace exports?
-          if (name) {
-            namespaceModule.used.add(name);
+        if (namespaceModule.namespaceNames.size === 1) {
+          const namespaceExports = this.getAllExports(namespaceModule);
+          for (let e of namespaceExports) {
+            this.markUsed(e.module, e.imported, context);
+            exportedNamespaceScopedNames[e.name] = 1;
           }
-        });
+        }
       }
     }
 
@@ -248,6 +251,7 @@ export class TSModuleGraph {
 
     // Assign unique names across all modules
     for (let m of this.modules.values()) {
+      let isNamespaceModule = m.namespaceNames.size > 0;
       for (let [orig, name] of m.names) {
         if (exportedNames.has(name) && exportedNames.get(name) === m) {
           continue;
@@ -260,6 +264,13 @@ export class TSModuleGraph {
         if (m.imports.has(orig)) {
           // Update imports after all modules's local variables have been renamed
           importedSymbolsToUpdate.push([m, orig]);
+          continue;
+        }
+
+        if (!isNamespaceModule && exportedNamespaceScopedNames[name]) {
+          // When there is a conflict between a global name that is not a top-level export and
+          // the top-level export of a namespace, prefer adding the disambiguator to the global name.
+          m.names.set(name, `_${name}${exportedNamespaceScopedNames[name]++}`);
           continue;
         }
 
