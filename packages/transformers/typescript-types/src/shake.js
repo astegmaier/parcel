@@ -127,41 +127,41 @@ export function shake(
         return null;
       }
 
-      // Remove original export modifiers
-      node = ts.getMutableClone(node);
-      node.modifiers = (node.modifiers || []).filter(
-        m =>
-          m.kind !== ts.SyntaxKind.ExportKeyword &&
-          m.kind !== ts.SyntaxKind.DefaultKeyword,
-      );
-
       // Rename declarations
+      node = ts.getMutableClone(node);
       let newName = currentModule.getName(name);
       if (newName !== name && newName !== 'default') {
         node.name = ts.createIdentifier(newName);
       }
 
-      // Export declarations that should be exported, including from a namespace.
-      // TODO: refactor this common logic to TSModule
-      const isExportedFromNamespace =
-        currentModule.namespaceNames.size > 0 &&
-        currentModule.exports.some(e => e.name === name);
-      if (
-        exportedNames.get(newName) === currentModule ||
-        isExportedFromNamespace
-      ) {
-        if (newName === 'default') {
+      // Only tweak export/declare modifiers if we're not in a namespace.
+      if (currentModule.namespaceNames.size === 0) {
+        // Remove original export modifiers
+        node.modifiers = (node.modifiers || []).filter(
+          m =>
+            m.kind !== ts.SyntaxKind.ExportKeyword &&
+            m.kind !== ts.SyntaxKind.DefaultKeyword,
+        );
+
+        // Export declarations that should be exported
+        if (exportedNames.get(newName) === currentModule) {
+          if (newName === 'default') {
+            node.modifiers.unshift(
+              ts.createModifier(ts.SyntaxKind.DefaultKeyword),
+            );
+          }
+
           node.modifiers.unshift(
-            ts.createModifier(ts.SyntaxKind.DefaultKeyword),
+            ts.createModifier(ts.SyntaxKind.ExportKeyword),
+          );
+        } else if (
+          ts.isFunctionDeclaration(node) ||
+          ts.isClassDeclaration(node)
+        ) {
+          node.modifiers.unshift(
+            ts.createModifier(ts.SyntaxKind.DeclareKeyword),
           );
         }
-
-        node.modifiers.unshift(ts.createModifier(ts.SyntaxKind.ExportKeyword));
-      } else if (
-        ts.isFunctionDeclaration(node) ||
-        ts.isClassDeclaration(node)
-      ) {
-        node.modifiers.unshift(ts.createModifier(ts.SyntaxKind.DeclareKeyword));
       }
     }
 
@@ -173,6 +173,11 @@ export function shake(
         return null;
       }
 
+      // Leave modifiers untouched if we're exporting from a namespace.
+      if (currentModule.namespaceNames.size > 0) {
+        return node;
+      }
+
       // Remove original export modifiers
       node.modifiers = (node.modifiers || []).filter(
         m =>
@@ -180,14 +185,9 @@ export function shake(
           m.kind !== ts.SyntaxKind.DeclareKeyword,
       );
 
-      // Add export modifier if all declarations are exported, or if the declaration was exported from a namespace.
+      // Add export modifier if all declarations are exported.
       let isExported = node.declarationList.declarations.every(
-        d =>
-          exportedNames.get(d.name.text) === currentModule ||
-          // TODO: refactor this common logic to TSModule
-          (currentModule.namespaceNames.size > 0 &&
-            // TODO: there might be a bug here if the variable was renamed due to a conflict.
-            currentModule.exports.some(e => e.name === d.name.text)),
+        d => exportedNames.get(d.name.text) === currentModule,
       );
       if (isExported) {
         node.modifiers.unshift(ts.createModifier(ts.SyntaxKind.ExportKeyword));

@@ -1,7 +1,7 @@
 export * as StuffNamespaceRoot from './stuff';
 
 export { nameConflictFunction } from "./other1"
-export { nameConflictFunction2 } from "./other3";
+export { nameConflictFunction2, nameConflictString } from "./other3";
 
 export { StuffNamespaceReexported as StuffNamespaceReexportedRenamed, Stuff2NamespaceReexported as Stuff2NamespaceReexportedRenamed } from "./re-exporter"
 import { StuffNamespaceInternal as StuffNamespaceInternalRenamed, Stuff2NamespaceNotExportedAtTopLevel, Stuff3NamespaceNotExportedAtTopLevel } from "./internal-exporter"

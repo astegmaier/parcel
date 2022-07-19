@@ -6,9 +6,11 @@ declare function xyz(message: number): void;
 export function nameConflictFunction2(): {
     message: string;
 };
+export const nameConflictString: string;
 export namespace StuffNamespaceRoot {
     export function log(f: typeof _log1 | typeof xyz): void;
     export function _nameConflictFunction21(): string;
+    export const _nameConflictString1: typeof nameConflictString;
     export interface TestInterface {
         foo: number;
         bar: boolean;
