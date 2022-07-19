@@ -431,6 +431,7 @@ describe('typescript types', function () {
           're-exporter.ts',
           'stuff.ts',
           'stuff2.ts',
+          'stuff3.ts',
         ],
       },
       {

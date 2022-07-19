@@ -56,6 +56,9 @@ export class TSModuleGraph {
         );
         if (resolved) {
           this.markUsed(resolved.module, resolved.imported, context);
+          if (resolved.namespaceModule) {
+            this.markUsed(resolved.namespaceModule, node.right.text, context);
+          }
         }
       } else if (ts.isIdentifier(node)) {
         this.markUsed(module, node.text, context);

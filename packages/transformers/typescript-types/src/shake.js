@@ -221,12 +221,18 @@ export function shake(
       const namespaceName = resolved?.namespaceModule?.namespaceNames
         .values()
         .next().value;
+
+      // If the qualifier references a namespace export that _will_ be exported at the top level, replace it with the "primary" namespace name.
       if (namespaceName) {
         return ts.updateQualifiedName(
           node,
           ts.createIdentifier(namespaceName),
           node.right,
         );
+      }
+      // If the qualifier references a namespace export that will _not_ be exported at the top level, remove it.
+      else if (resolved?.namespaceModule && !namespaceName) {
+        return ts.createIdentifier(node.right.text); // TODO: what about the case where the this name was renamed due to a collision?
       } else if (resolved && resolved.module.hasBinding(resolved.name)) {
         return ts.createIdentifier(resolved.name);
       } else {

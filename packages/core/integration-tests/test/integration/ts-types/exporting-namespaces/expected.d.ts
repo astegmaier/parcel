@@ -18,7 +18,12 @@ export { StuffNamespaceRoot as StuffNamespaceReexportedRenamed };
 export namespace Stuff2NamespaceReexportedRenamed {
     export const testBoolean: boolean;
 }
+declare class Stuff3Class {
+    message: string;
+    constructor(message: string);
+}
 export const testInstance: StuffNamespaceRoot.TestClass;
 export const anotherBoolean: typeof Stuff2NamespaceReexportedRenamed.testBoolean;
+export const stuff3ClassInstance: Stuff3Class;
 
 //# sourceMappingURL=types.d.ts.map
