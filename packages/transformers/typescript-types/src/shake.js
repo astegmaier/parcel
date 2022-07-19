@@ -227,12 +227,14 @@ export function shake(
         return ts.updateQualifiedName(
           node,
           ts.createIdentifier(namespaceName),
-          node.right,
+          node.right, // TODO: handle case where namespace sub-export is renamed.
         );
       }
       // If the qualifier references a namespace export that will _not_ be exported at the top level, remove it.
       else if (resolved?.namespaceModule && !namespaceName) {
-        return ts.createIdentifier(node.right.text); // TODO: what about the case where the this name was renamed due to a collision?
+        return ts.createIdentifier(
+          resolved.namespaceModule.getName(node.right.text),
+        );
       } else if (resolved && resolved.module.hasBinding(resolved.name)) {
         return ts.createIdentifier(resolved.name);
       } else {

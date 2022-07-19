@@ -8,3 +8,6 @@ export const testInstance = new StuffNamespaceInternalRenamed.TestClass();
 export const anotherBoolean: typeof Stuff2NamespaceNotExportedAtTopLevel.testBoolean = false;
 
 export const stuff3ClassInstance = new Stuff3NamespaceNotExportedAtTopLevel.Stuff3Class("Hello");
+
+export { nameConflictFunction } from "./other1"
+export const myFunction: typeof Stuff3NamespaceNotExportedAtTopLevel.nameConflictFunction = () => "Hello";

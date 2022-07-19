@@ -1,4 +1,7 @@
 declare function _log1(message: string): void;
+export function nameConflictFunction(): {
+    message: string;
+};
 declare function xyz(message: number): void;
 export namespace StuffNamespaceRoot {
     export function log(f: typeof _log1 | typeof xyz): void;
@@ -22,8 +25,10 @@ declare class Stuff3Class {
     message: string;
     constructor(message: string);
 }
+declare function _nameConflictFunction1(): string;
 export const testInstance: StuffNamespaceRoot.TestClass;
 export const anotherBoolean: typeof Stuff2NamespaceReexportedRenamed.testBoolean;
 export const stuff3ClassInstance: Stuff3Class;
+export const myFunction: typeof _nameConflictFunction1;
 
 //# sourceMappingURL=types.d.ts.map
