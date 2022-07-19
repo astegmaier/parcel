@@ -142,9 +142,10 @@ export function shake(
       }
 
       // Export declarations that should be exported, including from a namespace.
+      // TODO: refactor this common logic to TSModule
       const isExportedFromNamespace =
         currentModule.namespaceNames.size > 0 &&
-        currentModule.exports.some(({name}) => name === newName);
+        currentModule.exports.some(e => e.name === name);
       if (
         exportedNames.get(newName) === currentModule ||
         isExportedFromNamespace
@@ -183,8 +184,10 @@ export function shake(
       let isExported = node.declarationList.declarations.every(
         d =>
           exportedNames.get(d.name.text) === currentModule ||
+          // TODO: refactor this common logic to TSModule
           (currentModule.namespaceNames.size > 0 &&
-            currentModule.exports.some(({name}) => name === d.name.text)),
+            // TODO: there might be a bug here if the variable was renamed due to a conflict.
+            currentModule.exports.some(e => e.name === d.name.text)),
       );
       if (isExported) {
         node.modifiers.unshift(ts.createModifier(ts.SyntaxKind.ExportKeyword));
@@ -218,6 +221,7 @@ export function shake(
         node.left.text,
         node.right.text,
       );
+      // TODO: refactor this common logic to TSModule.
       const namespaceName = resolved?.namespaceModule?.namespaceNames
         .values()
         .next().value;

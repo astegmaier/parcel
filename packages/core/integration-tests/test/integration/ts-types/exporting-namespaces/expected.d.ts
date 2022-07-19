@@ -3,8 +3,12 @@ export function nameConflictFunction(): {
     message: string;
 };
 declare function xyz(message: number): void;
+export function nameConflictFunction2(): {
+    message: string;
+};
 export namespace StuffNamespaceRoot {
     export function log(f: typeof _log1 | typeof xyz): void;
+    export function _nameConflictFunction21(): string;
     export interface TestInterface {
         foo: number;
         bar: boolean;
@@ -14,6 +18,7 @@ export namespace StuffNamespaceRoot {
     export class TestClass {
         a: string;
         b: number;
+        myFunction: typeof nameConflictFunction2;
         constructor();
     }
 }

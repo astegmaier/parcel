@@ -428,6 +428,7 @@ describe('typescript types', function () {
           'internal-exporter.ts',
           'other1.ts',
           'other2.ts',
+          'other3.ts',
           're-exporter.ts',
           'stuff.ts',
           'stuff2.ts',
