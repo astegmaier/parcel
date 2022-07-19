@@ -37,5 +37,6 @@ export const testInstance: StuffNamespaceRoot.TestClass;
 export const anotherBoolean: typeof Stuff2NamespaceReexportedRenamed.testBoolean;
 export const stuff3ClassInstance: Stuff3Class;
 export const myFunction: typeof _nameConflictFunction1;
+export const somethingWithTypingFromARenamedNamespaceExport: typeof StuffNamespaceRoot._nameConflictFunction21;
 
 //# sourceMappingURL=types.d.ts.map

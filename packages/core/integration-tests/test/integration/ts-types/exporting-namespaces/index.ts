@@ -13,3 +13,5 @@ export const anotherBoolean: typeof Stuff2NamespaceNotExportedAtTopLevel.testBoo
 export const stuff3ClassInstance = new Stuff3NamespaceNotExportedAtTopLevel.Stuff3Class("Hello");
 
 export const myFunction: typeof Stuff3NamespaceNotExportedAtTopLevel.nameConflictFunction = () => "Hello";
+
+export const somethingWithTypingFromARenamedNamespaceExport: typeof StuffNamespaceInternalRenamed.nameConflictFunction2 = () => "Hello";

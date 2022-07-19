@@ -221,24 +221,24 @@ export function shake(
         node.left.text,
         node.right.text,
       );
-      // TODO: refactor this common logic to TSModule.
-      const namespaceName = resolved?.namespaceModule?.namespaceNames
-        .values()
-        .next().value;
 
-      // If the qualifier references a namespace export that _will_ be exported at the top level, replace it with the "primary" namespace name.
-      if (namespaceName) {
-        return ts.updateQualifiedName(
-          node,
-          ts.createIdentifier(namespaceName),
-          node.right, // TODO: handle case where namespace sub-export is renamed.
-        );
-      }
-      // If the qualifier references a namespace export that will _not_ be exported at the top level, remove it.
-      else if (resolved?.namespaceModule && !namespaceName) {
-        return ts.createIdentifier(
-          resolved.namespaceModule.getName(node.right.text),
-        );
+      const namespaceModule = resolved?.namespaceModule;
+      if (namespaceModule) {
+        // TODO: refactor this common logic to TSModule.
+        const namespaceName = namespaceModule.namespaceNames
+          .values()
+          .next().value;
+        if (namespaceName) {
+          // If the qualifier references a namespace export that _will_ be exported at the top level, replace it with the "primary" namespace name.
+          return ts.updateQualifiedName(
+            node,
+            ts.createIdentifier(namespaceName), // TODO: handle the case where the namespace name has to be changed due to a conflict.
+            ts.createIdentifier(namespaceModule.getName(node.right.text)),
+          );
+        } else {
+          // If the qualifier references a namespace export that will _not_ be exported at the top level, remove it.
+          return ts.createIdentifier(namespaceModule.getName(node.right.text));
+        }
       } else if (resolved && resolved.module.hasBinding(resolved.name)) {
         return ts.createIdentifier(resolved.name);
       } else {
