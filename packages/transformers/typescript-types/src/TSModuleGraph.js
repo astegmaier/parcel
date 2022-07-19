@@ -254,7 +254,6 @@ export class TSModuleGraph {
 
     // Assign unique names across all modules
     for (let m of this.modules.values()) {
-      let isNamespaceModule = m.namespaceNames.size > 0;
       for (let [orig, name] of m.names) {
         if (exportedNames.has(name) && exportedNames.get(name) === m) {
           continue;
@@ -270,8 +269,11 @@ export class TSModuleGraph {
           continue;
         }
 
-        if (!isNamespaceModule && exportedNamespaceScopedNames[name]) {
-          // When there is a conflict between a global name that is not a top-level export and
+        if (
+          !m.isTopLevelNamespaceExport &&
+          exportedNamespaceScopedNames[name]
+        ) {
+          // When there is a conflict between a global name that is _not_ a top-level export and
           // the top-level export of a namespace, prefer adding the disambiguator to the global name.
           m.names.set(name, `_${name}${exportedNamespaceScopedNames[name]++}`);
           continue;

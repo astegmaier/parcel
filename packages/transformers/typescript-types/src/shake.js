@@ -54,8 +54,10 @@ export function shake(
 
       const visitedModuleContents = ts.visitEachChild(node, visit, context);
       const statements =
-        getNamespaceExportsAndAliases(_currentModule, visitedModuleContents) ??
-        visitedModuleContents.body.statements;
+        getNamespaceExportsAndAliases(
+          nullthrows(_currentModule),
+          visitedModuleContents,
+        ) ?? visitedModuleContents.body.statements;
 
       _currentModule = moduleStack.pop();
 
@@ -135,7 +137,7 @@ export function shake(
       }
 
       // Only tweak export/declare modifiers if we're not in a namespace.
-      if (currentModule.namespaceNames.size === 0) {
+      if (!currentModule.isTopLevelNamespaceExport) {
         // Remove original export modifiers
         node.modifiers = (node.modifiers || []).filter(
           m =>
@@ -174,7 +176,7 @@ export function shake(
       }
 
       // Leave modifiers untouched if we're exporting from a namespace.
-      if (currentModule.namespaceNames.size > 0) {
+      if (currentModule.isTopLevelNamespaceExport) {
         return node;
       }
 
@@ -224,10 +226,7 @@ export function shake(
 
       const namespaceModule = resolved?.namespaceModule;
       if (namespaceModule) {
-        // TODO: refactor this common logic to TSModule.
-        const namespaceName = namespaceModule.namespaceNames
-          .values()
-          .next().value;
+        const namespaceName = namespaceModule.primaryNamespaceName;
         if (namespaceName) {
           // If the qualifier references a namespace export that _will_ be exported at the top level, replace it with the "primary" namespace name.
           return ts.updateQualifiedName(
@@ -330,29 +329,26 @@ function generateImports(moduleGraph: TSModuleGraph) {
 }
 
 function getNamespaceExportsAndAliases(
-  m: ?TSModule,
+  m: TSModule,
   visitedModuleDeclaration: any,
 ): any {
-  if (m && m.namespaceNames.size > 0) {
-    const namespaceDeclarationsAndAliases = [];
-    let primaryNamespaceName: string;
+  const {primaryNamespaceName} = m;
+  if (primaryNamespaceName) {
+    // The primary namespace name contains the module contents, e.g. export namespace MyNamespace { ... }.
+    const namespaceDeclarationAndAliases = [
+      ts.createModuleDeclaration(
+        undefined, // decorators
+        ts.createModifiersFromModifierFlags(ts.ModifierFlags.Export), // modifiers
+        ts.createIdentifier(primaryNamespaceName), // name
+        ts.createModuleBlock(visitedModuleDeclaration.body.statements), // body
+        ts.NodeFlags.Namespace, // flags
+      ),
+    ];
+
+    // Subsequent exported namespace names are "aliases", e.g. export { MyNamespace as NamespaceAlias };
     for (const namespaceName of m.namespaceNames) {
-      // The first namespace name contains the contents of the namespaced module.
-      if (namespaceDeclarationsAndAliases.length === 0) {
-        primaryNamespaceName = namespaceName;
-        namespaceDeclarationsAndAliases.push(
-          ts.createModuleDeclaration(
-            undefined, // decorators
-            ts.createModifiersFromModifierFlags(ts.ModifierFlags.Export), // modifiers
-            ts.createIdentifier(namespaceName), // name
-            ts.createModuleBlock(visitedModuleDeclaration.body.statements), // body
-            ts.NodeFlags.Namespace, // flags
-          ),
-        );
-      }
-      // Subsequent exported namespace names are "aliases" - e.g. export { MainNamespaceName as NamespaceAlias };
-      else {
-        namespaceDeclarationsAndAliases.push(
+      if (namespaceName !== primaryNamespaceName) {
+        namespaceDeclarationAndAliases.push(
           ts.createExportDeclaration(
             undefined,
             undefined,
@@ -368,9 +364,7 @@ function getNamespaceExportsAndAliases(
         );
       }
     }
-    if (namespaceDeclarationsAndAliases.length > 0) {
-      return namespaceDeclarationsAndAliases;
-    }
+    return namespaceDeclarationAndAliases;
   }
   return null;
 }

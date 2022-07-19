@@ -23,6 +23,19 @@ export class TSModule {
     this.namespaceNames = new Set();
   }
 
+  /** Whether the module should be exported in the bundle as "export namespace MyNamespace {...}" instead of being flattened. */
+  get isTopLevelNamespaceExport(): boolean {
+    return this.namespaceNames.size > 0;
+  }
+
+  /**
+   * The namespace name that will ultiamtely contain the module contents. e.g. "export namespace MyNamespace {...}".
+   * Other names are "aliases" that will be exported as "export { MyNamespace as MyNamespaceAlias }"
+   */
+  get primaryNamespaceName(): string | null {
+    return this.namespaceNames.values().next()?.value ?? null;
+  }
+
   addImport(local: string, specifier: string, imported: string) {
     this.imports.set(local, {specifier, imported});
     if (imported !== '*' && imported !== 'default') {
