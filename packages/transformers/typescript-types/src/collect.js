@@ -66,7 +66,6 @@ export function collect(
           typeof ts.isNamespaceExport === 'function' &&
           ts.isNamespaceExport(node.exportClause)
         ) {
-          // TODO: could there be multiple export clauses in a namespace export?
           currentModule.addNamespaceExport(
             node.exportClause.name.text,
             node.moduleSpecifier.text,
