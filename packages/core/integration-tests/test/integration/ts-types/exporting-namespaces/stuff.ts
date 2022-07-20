@@ -1,6 +1,6 @@
 import { log as logFn1 } from "./other1";
 import { log as logFn2 } from "./other2";
-import { nameConflictFunction2 as nameConflictFunction2Local,  nameConflictString as nameConflictStringRenamed } from "./other3";
+import { nameConflictFunction2 as nameConflictFunction2Local, nameConflictString as nameConflictStringLocal } from "./other3";
 
 export function log(f: typeof logFn1 | typeof logFn2) {
   logFn1("1");
@@ -11,7 +11,7 @@ export function nameConflictFunction2(): string {
   return "this function's name conflicts with a top-level export in other3.ts";
 }
 
-export const nameConflictString: typeof nameConflictStringRenamed = "This variable's name conflicts with a top-level export from other3.ts";
+export const nameConflictString: typeof nameConflictStringLocal = "This variable's name conflicts with a top-level export from other3.ts";
 
 export interface TestInterface {
   foo: number;
