@@ -451,7 +451,7 @@ describe('typescript types', function () {
     assert.equal(dist, expected);
   });
 
-  it('should generate ts declarations with namespace exports', async function () {
+  it('should generate ts declarations with namespace exports (old)', async function () {
     let b = await bundle(
       path.join(
         __dirname,
@@ -495,6 +495,99 @@ describe('typescript types', function () {
       path.join(
         __dirname,
         '/integration/ts-types/exporting-namespaces/expected.d.ts',
+      ),
+      'utf8',
+    );
+    assert.equal(dist, expected);
+  });
+
+  it('should handle naming collisions between namespace names', async function () {
+    let b = await bundle(
+      path.join(
+        __dirname,
+        '/integration/ts-types/exporting-namespaces-collision/index.ts',
+      ),
+    );
+
+    assertBundles(b, [
+      {
+        name: 'types.d.ts',
+        type: 'ts',
+        assets: ['index.ts'],
+      },
+      {
+        name: 'main.js',
+        type: 'js',
+        assets: [
+          'index.ts',
+          'exporter.ts',
+          'other1.ts',
+          'other2.ts',
+          'consumer.ts',
+        ],
+      },
+    ]);
+
+    let dist = (
+      await outputFS.readFile(
+        path.join(
+          __dirname,
+          '/integration/ts-types/exporting-namespaces-collision/dist/types.d.ts',
+        ),
+        'utf8',
+      )
+    ).replace(/\r\n/g, '\n');
+    let expected = await inputFS.readFile(
+      path.join(
+        __dirname,
+        '/integration/ts-types/exporting-namespaces-collision/expected.d.ts',
+      ),
+      'utf8',
+    );
+    assert.equal(dist, expected);
+  });
+
+  it('should generate ts declarations with namespace exports (new)', async function () {
+    let b = await bundle(
+      path.join(
+        __dirname,
+        '/integration/ts-types/exporting-namespaces-new/index.ts',
+      ),
+    );
+
+    assertBundles(b, [
+      {
+        name: 'main.js',
+        type: 'js',
+        assets: [
+          'index.ts',
+          'namespace-other-exporter.ts',
+          'namespace-other.ts',
+          'namespace.ts',
+          'other.ts',
+          'wildcard-exports.ts',
+        ],
+      },
+      {
+        name: 'types.d.ts',
+        type: 'ts',
+        assets: ['index.ts'],
+      },
+    ]);
+
+    let dist = (
+      await outputFS.readFile(
+        path.join(
+          __dirname,
+          '/integration/ts-types/exporting-namespaces-new/dist/types.d.ts',
+        ),
+        'utf8',
+      )
+    ).replace(/\r\n/g, '\n');
+    let expected = await inputFS.readFile(
+      path.join(
+        __dirname,
+        '/integration/ts-types/exporting-namespaces-new/expected.d.ts',
       ),
       'utf8',
     );

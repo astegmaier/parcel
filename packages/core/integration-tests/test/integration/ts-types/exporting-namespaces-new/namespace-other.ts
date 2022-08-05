@@ -1,0 +1,1 @@
+export const a = { namespaceOtherA: "namespace-other.ts - a"}

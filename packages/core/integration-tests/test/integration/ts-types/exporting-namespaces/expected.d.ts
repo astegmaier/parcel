@@ -1,4 +1,4 @@
-declare function _log1(message: string): void;
+declare function log(message: string): void;
 export function nameConflictFunction(): {
     message: string;
 };
@@ -8,9 +8,12 @@ export function nameConflictFunction2(): {
 };
 export const nameConflictString: string;
 export namespace StuffNamespaceRoot {
-    export function log(f: typeof _log1 | typeof xyz): void;
-    export function _nameConflictFunction21(): string;
-    export const _nameConflictString1: typeof nameConflictString;
+    function _log1(f: typeof log | typeof xyz): void;
+    export { _log1 as log };
+    function _nameConflictFunction21(): string;
+    export { _nameConflictFunction21 as nameConflictFunction2 };
+    const _nameConflictString1: typeof nameConflictString;
+    export { _nameConflictString1 as nameConflictString };
     export interface TestInterface {
         foo: number;
         bar: boolean;
@@ -37,6 +40,6 @@ export const testInstance: StuffNamespaceRoot.TestClass;
 export const anotherBoolean: typeof Stuff2NamespaceReexportedRenamed.testBoolean;
 export const stuff3ClassInstance: Stuff3Class;
 export const myFunction: typeof _nameConflictFunction1;
-export const somethingWithTypingFromARenamedNamespaceExport: typeof StuffNamespaceRoot._nameConflictFunction21;
+export const somethingWithTypingFromARenamedNamespaceExport: typeof StuffNamespaceRoot.nameConflictFunction2;
 
 //# sourceMappingURL=types.d.ts.map

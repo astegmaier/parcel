@@ -164,17 +164,19 @@ export class TSModuleGraph {
     name: string,
     namespaceModule?: TSModule,
   |} {
+    let wildcardExports = [];
     for (let e of module.exports) {
       if (e.name === name || (e.isNamespaceExport && e.name === namespace)) {
         return this.getExport(module, e);
-      } else if (e.specifier) {
-        const m = this.resolveExport(
-          nullthrows(this.getModule(e.specifier)),
-          name,
-        );
-        if (m) {
-          return m;
-        }
+      } else if (e.specifier && !e.name) {
+        // Only look inside wildcard export names if we don't find a named export.
+        wildcardExports.push(e.specifier);
+      }
+    }
+    for (const specifier of wildcardExports) {
+      const m = this.resolveExport(nullthrows(this.getModule(specifier)), name);
+      if (m) {
+        return m;
       }
     }
   }
@@ -237,7 +239,6 @@ export class TSModuleGraph {
   propagate(context: any): Map<string, TSModule> {
     // Resolve all exported values, and mark them as used.
     let names = Object.create(null);
-    let exportedNamespaceScopedNames = Object.create(null);
     let exportedNames = new Map<string, TSModule>();
     for (let e of this.getAllExports()) {
       this.markUsed(e.module, e.imported, context);
@@ -252,7 +253,6 @@ export class TSModuleGraph {
           const namespaceExports = this.getAllExports(namespaceModule);
           for (let e of namespaceExports) {
             this.markUsed(e.module, e.imported, context);
-            exportedNamespaceScopedNames[e.name] = 1;
           }
         }
       }
@@ -262,35 +262,80 @@ export class TSModuleGraph {
 
     // Assign unique names across all modules
     for (let m of this.modules.values()) {
-      for (let [orig, name] of m.names) {
-        if (exportedNames.has(name) && exportedNames.get(name) === m) {
-          continue;
+      if (!m.isTopLevelNamespaceExport) {
+        for (let [orig, name] of m.names) {
+          if (exportedNames.has(name) && exportedNames.get(name) === m) {
+            continue;
+          }
+
+          if (!m.used.has(orig)) {
+            continue;
+          }
+
+          if (m.imports.has(orig)) {
+            // Update imports after all modules's local variables have been renamed
+            importedSymbolsToUpdate.push([m, orig]);
+            continue;
+          }
+
+          if (names[name]) {
+            m.names.set(name, `_${name}${names[name]++}`);
+          } else {
+            names[name] = 1;
+          }
+        }
+      }
+    }
+
+    // TODO: could we do this more efficiently? Maybe create an namespaceModules array when iterating the first time?
+    for (let m of this.modules.values()) {
+      if (m.isTopLevelNamespaceExport) {
+        // Aliased imports might conflict with namespace-scoped names/exports
+        // Example: "import { foo as bar } from './other'" might conflict with "export const foo = ..." within the namespace
+        // TODO: we probably don't need to build data strucutre - it could be done only as needed with a quick check.
+        const aliasedImports = new Set();
+        for (const [alias, i] of m.imports) {
+          if (alias !== i.imported) {
+            aliasedImports.add(i.imported);
+          }
         }
 
-        if (!m.used.has(orig)) {
-          continue;
+        // Any kind of re-export might conflict with local namespace-scoped name.
+        // Example: "export { foo } from './other'"" might conflict with a "const foo = ..." defined within the namespace.
+        // Example: "export * from "./other2" might result in an "export { bar }" statement being inserted into the final output,
+        //          which could conflict with a local "const bar = ..." defined within the namespace.
+        // TODO: could this call to getAllExports be combined with the same call above?
+        const reExportNames = new Set();
+        for (const e of this.getAllExports(m)) {
+          // Example m:
+          // export { default as dRenamed } from './other'
+          // ...becomes...
+          // { module: [TSModule for "other.ts"], imported: 'd', name: 'dRenamed', namespaceModule: undefined },
+          if (e.module !== m) {
+            reExportNames.add(e.imported);
+          }
         }
 
-        if (m.imports.has(orig)) {
-          // Update imports after all modules's local variables have been renamed
-          importedSymbolsToUpdate.push([m, orig]);
-          continue;
-        }
+        const namespaceNames = Object.create(null);
+        for (let [orig, name] of m.names) {
+          // TODO: is this necesary? I think we marked everything as used, no?
+          if (!m.used.has(orig)) {
+            continue;
+          }
 
-        if (
-          !m.isTopLevelNamespaceExport &&
-          exportedNamespaceScopedNames[name]
-        ) {
-          // When there is a conflict between a global name that is _not_ a top-level export and
-          // the top-level export of a namespace, prefer adding the disambiguator to the global name.
-          m.names.set(name, `_${name}${exportedNamespaceScopedNames[name]++}`);
-          continue;
-        }
+          // TODO: is this necessary?
+          if (m.imports.has(orig)) {
+            // Update imports after all modules's local variables have been renamed
+            importedSymbolsToUpdate.push([m, orig]);
+            continue;
+          }
 
-        if (names[name]) {
-          m.names.set(name, `_${name}${names[name]++}`);
-        } else {
-          names[name] = 1;
+          if (aliasedImports.has(name) || reExportNames.has(name)) {
+            if (!namespaceNames[name]) {
+              namespaceNames[name] = names[name];
+            }
+            m.names.set(name, `_${name}${namespaceNames[name]++}`);
+          }
         }
       }
     }
@@ -304,6 +349,12 @@ export class TSModuleGraph {
 
       // If the module is bundled, map the local name to the original exported name.
       if (this.modules.has(imp.specifier)) {
+        // If the import is from a namespace module, add the namespace specifier.
+        const {primaryNamespaceName} = imported.module;
+        if (primaryNamespaceName) {
+          m.names.set(orig, `${primaryNamespaceName}.${imported.name}`);
+          continue;
+        }
         m.names.set(orig, imported.imported);
         continue;
       }

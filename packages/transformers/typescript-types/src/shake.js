@@ -79,9 +79,84 @@ export function shake(
     }
 
     let currentModule = nullthrows(_currentModule);
-    // Remove exports from flattened modules
     if (ts.isExportDeclaration(node)) {
-      if (
+      if (currentModule.isTopLevelNamespaceExport) {
+        if (!node.moduleSpecifier) {
+          // Leve internal export statements alone
+          // TODO: add test for this.
+          return node;
+        }
+        const referencedModule = moduleGraph.getModule(
+          node.moduleSpecifier.text,
+        );
+        if (!referencedModule) {
+          // Leave external re-exports alone. TODO: maybe not? there's complicated logic here.
+          return node;
+        }
+        if (node.exportClause) {
+          // Transform export declarations in namespace modules with final names, and remove the module specifier. For example...
+          //    export {foo as renamed, bar} from './other';
+          //    ...might become...
+          //    export { _foo1 as renamed, _bar1 };
+          //    ...if foo and bar from "other" had to be renamed.
+          const exported = node.exportClause.elements.map(exportSpecifier => {
+            // TODO: what if "propertyName": were a qualified name? e.g. MyNamespace.Foo Is that even possible?
+            if (exportSpecifier.propertyName) {
+              const resolved = moduleGraph.resolveExport(
+                referencedModule,
+                exportSpecifier.propertyName.text,
+              );
+              if (resolved) {
+                // TODO: when might this not resolve? Maybe for external modules? Definitely need handle this.
+                // TODO: this has a 2 argument signature in TS 3.3 (flow definitions), but a 3 argument signature in recent versions of TS
+                // prettier-ignore
+                // $FlowFixMe[incompatible-call]
+                // $FlowFixMe[extra-arg]
+                return ts.updateExportSpecifier(exportSpecifier, exportSpecifier.isTypeOnly, ts.createIdentifier(referencedModule.getName(resolved.imported)), exportSpecifier.name);
+              }
+            }
+            return exportSpecifier;
+          });
+          return ts.updateExportDeclaration(
+            node,
+            node.decorators, // decorators
+            node.modifiers, // modifiers
+            ts.updateNamedExports(node.exportClause, exported),
+            undefined, // moduleSpecifier
+          );
+        } else {
+          // Transform wildcard exports into named exports.
+          //
+          const allWildcardExports =
+            moduleGraph.getAllExports(referencedModule);
+          const wildcardExportSpecifiers = [];
+          // TODO: can we do this in a more efficient way?
+          const allNamedExports = new Set();
+          for (const e of currentModule.exports) {
+            allNamedExports.add(e.name);
+          }
+          for (const e of allWildcardExports) {
+            // Named exports will win over wildcard export names.
+            if (!allNamedExports.has(e.name)) {
+              const imported = referencedModule.getName(e.imported);
+              wildcardExportSpecifiers.push(
+                // TODO: this has a 2 argument signature in TS 3.3 (flow definitions), but a 3 argument signature in recent versions of TS
+                // prettier-ignore
+                // $FlowFixMe[incompatible-call]
+                // $FlowFixMe[extra-arg]
+                ts.createExportSpecifier(false, imported !== e.name ? imported : undefined, e.name),
+              );
+            }
+          }
+          return ts.createExportDeclaration(
+            undefined, // decorators
+            undefined, // modifiers
+            ts.createNamedExports(wildcardExportSpecifiers),
+          );
+        }
+      }
+      // Remove exports from flattened modules
+      else if (
         !node.moduleSpecifier ||
         moduleGraph.getModule(node.moduleSpecifier.text)
       ) {
@@ -113,8 +188,20 @@ export function shake(
       }
     }
 
-    // Remove export assignment if unused.
     if (ts.isExportAssignment(node)) {
+      // For namespace modules, transform "export default x" to "export {x as default}"
+      if (currentModule.isTopLevelNamespaceExport && !node.isExportEquals) {
+        const namedExport = ts.createNamedExports([
+          // TODO: this has a 2 argument signature in TS 3.3 (flow definitions), but a 3 argument signature in recent versions of TS
+          // prettier-ignore
+          // $FlowFixMe[incompatible-call]
+          // $FlowFixMe[extra-arg]
+          ts.createExportSpecifier(false, ts.createIdentifier(currentModule.getName(node.expression.text)), ts.createIdentifier('default')),
+        ]);
+        // TODO: flow definition does not include "boolean" as 3rd parameter, but ts-ast-viewer suggests that it should.
+        return ts.createExportDeclaration(undefined, undefined, namedExport);
+      }
+      // Otherwise, remove export assignment if unused.
       let name = currentModule.getName('default');
       if (exportedNames.get(name) !== currentModule) {
         return null;
@@ -122,7 +209,8 @@ export function shake(
     }
 
     if (isDeclaration(ts, node)) {
-      let name = getExportedName(ts, node) || node.name.text;
+      const exportedName = getExportedName(ts, node);
+      let name = exportedName || node.name.text;
 
       // Remove unused declarations
       if (!currentModule.used.has(name)) {
@@ -136,8 +224,28 @@ export function shake(
         node.name = ts.createIdentifier(newName);
       }
 
-      // Only tweak export/declare modifiers if we're not in a namespace.
-      if (!currentModule.isTopLevelNamespaceExport) {
+      if (currentModule.isTopLevelNamespaceExport) {
+        // In general, declarations in a namespace should be left alone. However, if an export has to be renamed due to a conflict,
+        // then we want to instead declare the local (renamed) function/class/etc. and export it with the original name, e.g.
+        //    export function foo: string --> function _foo1: string; export { _foo1 as foo };
+        // TODO: exportedName might be "default" - need to handle this.
+        if (exportedName !== newName) {
+          node.modifiers = node.modifiers.filter(
+            m => m.kind !== ts.SyntaxKind.ExportKeyword,
+          );
+          const renamedExports = ts.createNamedExports([
+            // TODO: this has a 2 argument signature in TS 3.3 (flow definitions), but a 3 argument signature in recent versions of TS
+            // $FlowFixMe[incompatible-call]
+            // $FlowFixMe[extra-arg]
+            ts.createExportSpecifier(false, newName, name),
+          ]);
+          return [
+            ts.visitEachChild(node, visit, context),
+            // TODO: flow definition does not include "boolean" as 3rd parameter, but ts-ast-viewer suggests that it should.
+            ts.createExportDeclaration(undefined, undefined, renamedExports),
+          ];
+        }
+      } else {
         // Remove original export modifiers
         node.modifiers = (node.modifiers || []).filter(
           m =>
@@ -168,16 +276,45 @@ export function shake(
     }
 
     if (ts.isVariableStatement(node)) {
+      if (currentModule.isTopLevelNamespaceExport) {
+        // If we're exporting from a namespace, and the export had to be renamed due to a conflict,
+        // then we want to instead declare the local (renamed) variable and export it with the original name, e.g.
+        //    export const foo: string --> const _foo1: string; export { _foo1 as foo };
+        if (
+          // There are any declarations that have been renamed.
+          node.declarationList.declarations.some(
+            d => currentModule.getName(d.name.text) !== d.name.text,
+          ) &&
+          // The declaration is exported.
+          node.modifiers?.some(m => m.kind === ts.SyntaxKind.ExportKeyword)
+        ) {
+          node.modifiers = node.modifiers.filter(
+            m => m.kind !== ts.SyntaxKind.ExportKeyword,
+          );
+          const renamedExports = ts.createNamedExports(
+            node.declarationList.declarations.map(({name}) =>
+              // TODO: this has a 2 argument signature in TS 3.3 (flow definitions), but a 3 argument signature in recent versions of TS
+              // prettier-ignore
+              // $FlowFixMe[incompatible-call]
+              // $FlowFixMe[extra-arg]
+              ts.createExportSpecifier(false, currentModule.getName(name.text), name),
+            ),
+          );
+          return [
+            ts.visitEachChild(node, visit, context),
+            // TODO: flow definition does not include "boolean" as 3rd parameter, but ts-ast-viewer suggests that it should.
+            ts.createExportDeclaration(undefined, undefined, renamedExports),
+          ];
+        }
+        // Otherwise, namespace variable exports should be left alone.
+        return ts.visitEachChild(node, visit, context);
+      }
+
       node = ts.visitEachChild(node, visit, context);
 
       // Remove empty variable statements
       if (node.declarationList.declarations.length === 0) {
         return null;
-      }
-
-      // Leave modifiers untouched if we're exporting from a namespace.
-      if (currentModule.isTopLevelNamespaceExport) {
-        return node;
       }
 
       // Remove original export modifiers
@@ -224,18 +361,21 @@ export function shake(
         node.right.text,
       );
 
-      const namespaceModule = resolved?.namespaceModule;
+      // TODO: maybe we should change the structure of TSModuleGraph to just return the "namespaceName" and the namepsace module when resolving something???
+      const namespaceModule = resolved?.module.isTopLevelNamespaceExport
+        ? resolved.module
+        : resolved?.namespaceModule;
       if (namespaceModule) {
-        const namespaceName = namespaceModule.primaryNamespaceName;
-        if (namespaceName) {
+        if (namespaceModule.primaryNamespaceName) {
           // If the qualifier references a namespace export that _will_ be exported at the top level, replace it with the "primary" namespace name.
           return ts.updateQualifiedName(
             node,
-            ts.createIdentifier(namespaceName), // TODO: handle the case where the namespace name has to be changed due to a conflict.
-            ts.createIdentifier(namespaceModule.getName(node.right.text)),
+            ts.createIdentifier(namespaceModule.primaryNamespaceName),
+            node.right,
           );
         } else {
           // If the qualifier references a namespace export that will _not_ be exported at the top level, remove it.
+          // TODO: is it right to get the name from "namespaceModule"? What happens if we use "currentModule"?
           return ts.createIdentifier(namespaceModule.getName(node.right.text));
         }
       } else if (resolved && resolved.module.hasBinding(resolved.name)) {
