@@ -15,6 +15,25 @@
       "preLaunchTask": "npm: compile - packages/utils/parcelforvscode",
       "request": "launch",
       "type": "pwa-extensionHost"
+    },
+    {
+      "name": "Run ts-types Unit Tests",
+      "program": "${workspaceFolder}/node_modules/mocha/bin/_mocha",
+      "request": "launch",
+      "skipFiles": ["<node_internals>/**"],
+      "type": "node",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PARCEL_WORKERS": "0",
+        "NODE_OPTIONS": "--experimental-vm-modules",
+        "NODE_ENV": "test",
+        "PARCEL_BUILD_ENV": "test"
+      },
+      "args": [
+        "${workspaceFolder}/packages/core/integration-tests/test/ts-types.js",
+        "--timeout",
+        "999999999999"
+      ]
     }
   ]
 }

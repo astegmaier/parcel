@@ -3,9 +3,7 @@
 export type Import = {|specifier: string, imported: string|};
 export type Export =
   | {|name: string, imported: string, specifier?: ?string|}
-  | {|specifier: string|}
-  | {|name: string, specifier: string, isNamespaceExport: true|};
-
+  | {|specifier: string|};
 export class TSModule {
   imports: Map<string, Import>;
   exports: Array<Export>;
@@ -53,7 +51,7 @@ export class TSModule {
   }
 
   addNamespaceExport(name: string, specifier: string) {
-    this.exports.push({name, specifier, isNamespaceExport: true});
+    this.exports.push({name, specifier, imported: '*'});
   }
 
   addLocal(name: string, node: any) {

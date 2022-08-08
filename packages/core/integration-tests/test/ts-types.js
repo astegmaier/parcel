@@ -593,4 +593,44 @@ describe('typescript types', function () {
     );
     assert.equal(dist, expected);
   });
+
+  it('should generate ts declarations with namespace re-exports', async function () {
+    let b = await bundle(
+      path.join(
+        __dirname,
+        '/integration/ts-types/exporting-namespaces-reexport/index.ts',
+      ),
+    );
+
+    assertBundles(b, [
+      {
+        name: 'main.js',
+        type: 'js',
+        assets: ['index.ts', 'namespace.ts'],
+      },
+      {
+        name: 'types.d.ts',
+        type: 'ts',
+        assets: ['index.ts'],
+      },
+    ]);
+
+    let dist = (
+      await outputFS.readFile(
+        path.join(
+          __dirname,
+          '/integration/ts-types/exporting-namespaces-reexport/dist/types.d.ts',
+        ),
+        'utf8',
+      )
+    ).replace(/\r\n/g, '\n');
+    let expected = await inputFS.readFile(
+      path.join(
+        __dirname,
+        '/integration/ts-types/exporting-namespaces-reexport/expected.d.ts',
+      ),
+      'utf8',
+    );
+    assert.equal(dist, expected);
+  });
 });

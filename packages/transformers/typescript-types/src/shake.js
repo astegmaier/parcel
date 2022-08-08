@@ -361,25 +361,24 @@ export function shake(
         node.right.text,
       );
 
-      // TODO: maybe we should change the structure of TSModuleGraph to just return the "namespaceName" and the namepsace module when resolving something???
-      const namespaceModule = resolved?.module.isTopLevelNamespaceExport
-        ? resolved.module
-        : resolved?.namespaceModule;
-      if (namespaceModule) {
-        if (namespaceModule.primaryNamespaceName) {
-          // If the qualifier references a namespace export that _will_ be exported at the top level, replace it with the "primary" namespace name.
-          return ts.updateQualifiedName(
-            node,
-            ts.createIdentifier(namespaceModule.primaryNamespaceName),
-            node.right,
-          );
-        } else {
-          // If the qualifier references a namespace export that will _not_ be exported at the top level, remove it.
-          // TODO: is it right to get the name from "namespaceModule"? What happens if we use "currentModule"?
-          return ts.createIdentifier(namespaceModule.getName(node.right.text));
-        }
-      } else if (resolved && resolved.module.hasBinding(resolved.name)) {
-        return ts.createIdentifier(resolved.name);
+      if (resolved && resolved.module.primaryNamespaceName) {
+        // If the qualifier references a namespace export that will be exported at the top level, replace it with the "primary" namespace name.
+        return ts.updateQualifiedName(
+          node,
+          ts.createIdentifier(resolved.module.primaryNamespaceName),
+          node.right,
+        );
+        // TODO: this is a hack: When the qualifier is to an external namespace _import_ (e.g. import * as React from "react"), then resolved.module will be the same as currentModule because of a check in resolveImport.
+      } else if (
+        resolved &&
+        resolved.imported === '*' &&
+        resolved.module !== currentModule
+      ) {
+        // If the qualifier references a namespace export that will _not_ be exported at the top level, remove it.
+        // TODO: there may be a bug here if the 'flattened' namespace module _re_exports stuff. We may need to do some serious surgery to make 'resolveImport' pass through the flattened module in this case.
+        return ts.createIdentifier(resolved.module.getName(node.right.text));
+      } else if (resolved && resolved.module.hasBinding(resolved.imported)) {
+        return ts.createIdentifier(resolved.module.getName(resolved.imported));
       } else {
         return ts.updateQualifiedName(
           node,
@@ -387,6 +386,27 @@ export function shake(
           node.right,
         );
       }
+      // if (resolved && resolved.imported === '*') {
+      //   if (resolved.module.primaryNamespaceName) {
+      //     // If the qualifier references a namespace export that _will_ be exported at the top level, replace it with the "primary" namespace name.
+      //     return ts.updateQualifiedName(
+      //       node,
+      //       ts.createIdentifier(resolved.module.primaryNamespaceName),
+      //       node.right,
+      //     );
+      //   } else {
+      //     // If the qualifier references a namespace export that will _not_ be exported at the top level, remove it.
+      //     return ts.createIdentifier(resolved.module.getName(node.right.text));
+      //   }
+      // } else if (resolved && resolved.module.hasBinding(resolved.imported)) {
+      //   return ts.createIdentifier(resolved.module.getName(resolved.imported));
+      // } else {
+      //   return ts.updateQualifiedName(
+      //     node,
+      //     ts.createIdentifier(currentModule.getName(node.left.text)),
+      //     node.right,
+      //   );
+      // }
     }
 
     // Remove private properties

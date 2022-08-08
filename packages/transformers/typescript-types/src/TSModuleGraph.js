@@ -31,6 +31,7 @@ export class TSModuleGraph {
     // If name is imported, mark used in the original module
     if (module.imports.has(name)) {
       module.used.add(name);
+      // TODO: we might need to add something here for namespace imports that get re-exported at the top level. In this case we want to mark _all_ the names in the namespace as used.
       let resolved = this.resolveImport(module, name);
       // Missing or external
       if (!resolved || resolved.module === module) {
@@ -55,9 +56,10 @@ export class TSModuleGraph {
           node.right.text,
         );
         if (resolved) {
-          this.markUsed(resolved.module, resolved.imported, context);
-          if (resolved.namespaceModule) {
-            this.markUsed(resolved.namespaceModule, node.right.text, context);
+          if (resolved.imported === '*') {
+            this.markUsed(resolved.module, node.right.text, context);
+          } else {
+            this.markUsed(resolved.module, resolved.imported, context);
           }
         }
       } else if (ts.isIdentifier(node)) {
@@ -78,12 +80,7 @@ export class TSModuleGraph {
   getExport(
     m: TSModule,
     e: Export,
-  ): ?{|
-    imported: string,
-    module: TSModule,
-    name: string,
-    namespaceModule?: TSModule,
-  |} {
+  ): ?{|imported: string, module: TSModule, name: string|} {
     invariant(e.name != null);
     let exportName = e.name;
 
@@ -94,7 +91,7 @@ export class TSModuleGraph {
         return null;
       }
 
-      let exp = this.resolveExport(m, e.imported);
+      let exp = this.resolveExport(m, e.imported, undefined, exportName); // TODO: remove 'exportName'
       if (!exp) {
         return null;
       }
@@ -103,8 +100,6 @@ export class TSModuleGraph {
         module: exp.module,
         imported: exp.imported || exp.name, // TODO: is there a bug here?
         name: exportName,
-        // TODO: Do we need to do something special here to handle external exports?
-        namespaceModule: exp.namespaceModule,
       };
     }
 
@@ -122,11 +117,7 @@ export class TSModuleGraph {
     return {
       module: m,
       name: exportName,
-      imported: e.imported != null ? m.getName(e.imported) : exportName,
-      // TODO: this will throw if we do a namespace export of an external module. Need to implement.
-      namespaceModule: e.isNamespaceExport
-        ? nullthrows(this.getModule(e.specifier))
-        : undefined,
+      imported: e.imported || exportName,
     };
   }
 
@@ -134,12 +125,7 @@ export class TSModuleGraph {
     module: TSModule,
     local: string,
     imported?: string,
-  ): ?{|
-    imported: string,
-    module: TSModule,
-    name: string,
-    namespaceModule?: TSModule,
-  |} {
+  ): ?{|imported: string, module: TSModule, name: string|} {
     let i = module.imports.get(local);
     if (!i) {
       return null;
@@ -157,16 +143,19 @@ export class TSModuleGraph {
   resolveExport(
     module: TSModule,
     name: string,
-    namespace?: string,
-  ): ?{|
-    imported: string,
-    module: TSModule,
-    name: string,
-    namespaceModule?: TSModule,
-  |} {
+    imported?: string,
+  ): ?{|imported: string, module: TSModule, name: string|} {
+    // If we're resolving a namespace export into this module, return immediately.
+    // TODO: should we move this check into getExport? / resolveImport?
+    if (name === '*') {
+      return {name, module, imported: '*'};
+    }
     let wildcardExports = [];
     for (let e of module.exports) {
-      if (e.name === name || (e.isNamespaceExport && e.name === namespace)) {
+      if (
+        e.name === name || // Named exports in this module
+        (e.imported === '*' && e.name === imported) // Namepsace exports in this module (e.g. export * as Name from "other-module")
+      ) {
         return this.getExport(module, e);
       } else if (e.specifier && !e.name) {
         // Only look inside wildcard export names if we don't find a named export.
@@ -184,12 +173,7 @@ export class TSModuleGraph {
   getAllExports(
     module: TSModule = nullthrows(this.mainModule),
     excludeDefault: boolean = false,
-  ): Iterator<{|
-    imported: string,
-    module: TSModule,
-    name: string,
-    namespaceModule?: TSModule,
-  |}> {
+  ): Iterator<{|imported: string, module: TSModule, name: string|}> {
     let res = new Map();
     for (let e of module.exports) {
       if (e.name && (!excludeDefault || e.name !== 'default')) {
@@ -241,20 +225,24 @@ export class TSModuleGraph {
     let names = Object.create(null);
     let exportedNames = new Map<string, TSModule>();
     for (let e of this.getAllExports()) {
-      this.markUsed(e.module, e.imported, context);
-      e.module.names.set(e.imported, e.name);
-      names[e.name] = 1;
-      exportedNames.set(e.name, e.module);
-
-      const {namespaceModule} = e;
-      if (namespaceModule) {
-        namespaceModule.namespaceNames.add(e.name);
-        if (namespaceModule.namespaceNames.size === 1) {
-          const namespaceExports = this.getAllExports(namespaceModule);
-          for (let e of namespaceExports) {
-            this.markUsed(e.module, e.imported, context);
+      // Namespace exports (e.g. export * as NamespaceName from 'module')
+      if (e.imported === '*') {
+        if (e.module.namespaceNames.size === 0) {
+          for (let exp of this.getAllExports(e.module)) {
+            // TODO: what if one of "exp" is also a namespace export?
+            this.markUsed(exp.module, exp.imported, context); // All the exports of the namespace need to be present.
+            // e.module.names.set(exp.imported, exp.name); // TODO: is this necessary?
           }
         }
+        e.module.namespaceNames.add(e.name);
+        names[e.name] = 1; // Only "NamespaceName" is global, not its contents.
+      }
+      // Named exports
+      else {
+        this.markUsed(e.module, e.imported, context);
+        e.module.names.set(e.imported, e.name);
+        names[e.name] = 1;
+        exportedNames.set(e.name, e.module);
       }
     }
 
@@ -312,7 +300,7 @@ export class TSModuleGraph {
           // ...becomes...
           // { module: [TSModule for "other.ts"], imported: 'd', name: 'dRenamed', namespaceModule: undefined },
           if (e.module !== m) {
-            reExportNames.add(e.imported);
+            reExportNames.add(e.module.getName(e.imported));
           }
         }
 
@@ -351,11 +339,12 @@ export class TSModuleGraph {
       if (this.modules.has(imp.specifier)) {
         // If the import is from a namespace module, add the namespace specifier.
         const {primaryNamespaceName} = imported.module;
+        const name = imported.module.getName(imported.imported);
         if (primaryNamespaceName) {
-          m.names.set(orig, `${primaryNamespaceName}.${imported.name}`);
+          m.names.set(orig, `${primaryNamespaceName}.${name}`);
           continue;
         }
-        m.names.set(orig, imported.imported);
+        m.names.set(orig, name);
         continue;
       }
 
