@@ -31,14 +31,16 @@ export class TSModuleGraph {
     // If name is imported, mark used in the original module
     if (module.imports.has(name)) {
       module.used.add(name);
-      // TODO: we might need to add something here for namespace imports that get re-exported at the top level. In this case we want to mark _all_ the names in the namespace as used.
       let resolved = this.resolveImport(module, name);
       // Missing or external
       if (!resolved || resolved.module === module) {
         return;
       }
 
-      return this.markUsed(resolved.module, resolved.imported, context);
+      // Namespace imports should be ignored - we care about marking used the things _inside_ the namespace import, instead of the whole namespace (e.g. 'foo' in 'MyNamepsace.foo')
+      if (resolved.imported !== '*') {
+        return this.markUsed(resolved.module, resolved.imported, context);
+      }
     }
 
     if (module.used.has(name)) {
@@ -56,11 +58,7 @@ export class TSModuleGraph {
           node.right.text,
         );
         if (resolved) {
-          if (resolved.imported === '*') {
-            this.markUsed(resolved.module, node.right.text, context);
-          } else {
-            this.markUsed(resolved.module, resolved.imported, context);
-          }
+          this.markUsed(resolved.module, resolved.imported, context);
         }
       } else if (ts.isIdentifier(node)) {
         this.markUsed(module, node.text, context);
@@ -91,14 +89,19 @@ export class TSModuleGraph {
         return null;
       }
 
-      let exp = this.resolveExport(m, e.imported, undefined, exportName); // TODO: remove 'exportName'
+      // Namespace re-export
+      if (e.imported === '*') {
+        return {module: m, imported: '*', name: exportName};
+      }
+
+      let exp = this.resolveExport(m, e.imported);
       if (!exp) {
         return null;
       }
 
       return {
         module: exp.module,
-        imported: exp.imported || exp.name, // TODO: is there a bug here?
+        imported: exp.imported || exp.name,
         name: exportName,
       };
     }
@@ -110,7 +113,11 @@ export class TSModuleGraph {
         return null;
       }
 
-      return {module: imp.module, imported: imp.name, name: exportName};
+      return {
+        module: imp.module,
+        imported: imp.imported === '*' ? '*' : imp.name,
+        name: exportName,
+      };
     }
 
     // Named export
@@ -137,24 +144,30 @@ export class TSModuleGraph {
       return {module, name: local, imported: imported || i.imported};
     }
 
-    return this.resolveExport(m, imported || i.imported, i.imported);
+    // Namepsace imports in this module.
+    // TODO: maybe adjust the order here so we handle external namepsaces?
+    if (i.imported === '*' && !imported) {
+      return {module: m, name: local, imported: '*'};
+    }
+
+    let resolved = this.resolveExport(m, imported || i.imported, i.imported);
+    if (resolved?.imported === '*' && imported) {
+      // If 'resolved' is a namespace, but resolveImport was asked to resolve a qualified name (e.g. MyNamespace.foo), then we need to resolve 'foo' _within_ 'MyNamespace'
+      resolved = this.resolveExport(resolved.module, imported);
+    }
+    return resolved;
   }
 
   resolveExport(
     module: TSModule,
     name: string,
-    imported?: string,
+    namespace?: string,
   ): ?{|imported: string, module: TSModule, name: string|} {
-    // If we're resolving a namespace export into this module, return immediately.
-    // TODO: should we move this check into getExport? / resolveImport?
-    if (name === '*') {
-      return {name, module, imported: '*'};
-    }
     let wildcardExports = [];
     for (let e of module.exports) {
       if (
         e.name === name || // Named exports in this module
-        (e.imported === '*' && e.name === imported) // Namepsace exports in this module (e.g. export * as Name from "other-module")
+        (e.imported === '*' && e.name === namespace) // Namepsace exports in this module (e.g. export * as Name from "other-module")
       ) {
         return this.getExport(module, e);
       } else if (e.specifier && !e.name) {

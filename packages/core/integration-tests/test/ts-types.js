@@ -606,7 +606,7 @@ describe('typescript types', function () {
       {
         name: 'main.js',
         type: 'js',
-        assets: ['index.ts', 'namespace.ts'],
+        assets: ['index.ts', 'namespace.ts', 'namespace2.ts'],
       },
       {
         name: 'types.d.ts',
