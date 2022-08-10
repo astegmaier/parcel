@@ -81,41 +81,51 @@ export function shake(
     let currentModule = nullthrows(_currentModule);
     if (ts.isExportDeclaration(node)) {
       if (currentModule.isTopLevelNamespaceExport) {
-        if (!node.moduleSpecifier) {
-          // Leve internal export statements alone
-          // TODO: add test for this.
+        // Namespace exports (e.g. `export * foo from './bar'`)
+        if (
+          node.exportClause &&
+          // $FlowFixMe[prop-missing] - "isNamespaceExport" was added in Typescript 3.8 and is not present in the current flow definitions.
+          typeof ts.isNamespaceExport === 'function' &&
+          ts.isNamespaceExport(node.exportClause)
+        ) {
+          // TODO: handle this case.
+          // We'll want to transform "export * as NestedNamespace" to "export {TopLevelNamepsaceName as NestedNamespace}"
+          // This means we need to consider name conflicts between "TopLevelNamepsaceName" and names within the current namespace.
+          // It also introduces the case of namespaces aren't actually exported at the top level, but still need to be wrapped in "declare namespace {}"
           return node;
         }
-        const referencedModule = moduleGraph.getModule(
-          node.moduleSpecifier.text,
-        );
-        if (!referencedModule) {
-          // Leave external re-exports alone. TODO: maybe not? there's complicated logic here.
-          return node;
-        }
-        if (node.exportClause) {
+        // Named exports (e.g. export { foo as bar } from "./baz")
+        else if (node.exportClause?.elements) {
           // Transform export declarations in namespace modules with final names, and remove the module specifier. For example...
           //    export {foo as renamed, bar} from './other';
           //    ...might become...
           //    export { _foo1 as renamed, _bar1 };
           //    ...if foo and bar from "other" had to be renamed.
           const exported = node.exportClause.elements.map(exportSpecifier => {
-            // TODO: what if "propertyName": were a qualified name? e.g. MyNamespace.Foo Is that even possible?
-            if (exportSpecifier.propertyName) {
-              const resolved = moduleGraph.resolveExport(
-                referencedModule,
-                exportSpecifier.propertyName.text,
-              );
-              if (resolved) {
-                // TODO: when might this not resolve? Maybe for external modules? Definitely need handle this.
-                // TODO: this has a 2 argument signature in TS 3.3 (flow definitions), but a 3 argument signature in recent versions of TS
-                // prettier-ignore
-                // $FlowFixMe[incompatible-call]
-                // $FlowFixMe[extra-arg]
-                return ts.updateExportSpecifier(exportSpecifier, exportSpecifier.isTypeOnly, ts.createIdentifier(referencedModule.getName(resolved.imported)), exportSpecifier.name);
-              }
+            const resolved = moduleGraph.resolveExport(
+              currentModule,
+              exportSpecifier.name.text,
+            );
+            if (!resolved) {
+              // Leave external re-exports alone. TODO: maybe not? there's complicated logic here.
+              // TODO: is this the only case where resolved will be falsy? Is it even falsy in this case?
+              return node;
             }
-            return exportSpecifier;
+            const newPropertyName =
+              resolved.module.primaryNamespaceName ??
+              resolved.module.getName(resolved.imported);
+            if (newPropertyName === exportSpecifier.name.text) {
+              // If no-renaming is needed, don't add a duplicate propertyName (e.g. "export { foo as foo }")
+              // prettier-ignore
+              // $FlowFixMe[incompatible-call]
+              // $FlowFixMe[extra-arg]
+              return ts.updateExportSpecifier(exportSpecifier, exportSpecifier.isTypeOnly, undefined, exportSpecifier.name);
+            }
+            // TODO: this has a 2 argument signature in TS 3.3 (flow definitions), but a 3 argument signature in recent versions of TS
+            // prettier-ignore
+            // $FlowFixMe[incompatible-call]
+            // $FlowFixMe[extra-arg]
+            return ts.updateExportSpecifier(exportSpecifier, exportSpecifier.isTypeOnly, ts.createIdentifier(newPropertyName), exportSpecifier.name);
           });
           return ts.updateExportDeclaration(
             node,
@@ -124,9 +134,17 @@ export function shake(
             ts.updateNamedExports(node.exportClause, exported),
             undefined, // moduleSpecifier
           );
-        } else {
+        }
+        // Wildcard exports (e.g. export * from "./foo")
+        else {
           // Transform wildcard exports into named exports.
-          //
+          const referencedModule = moduleGraph.getModule(
+            node.moduleSpecifier?.text,
+          );
+          if (!referencedModule) {
+            // Leave external re-exports alone.
+            return node; // TODO: is this right? We do the same thing above for named exports.
+          }
           const allWildcardExports =
             moduleGraph.getAllExports(referencedModule);
           const wildcardExportSpecifiers = [];
@@ -353,29 +371,20 @@ export function shake(
       }
     }
 
-    // Replace namespace references with final names
-    if (ts.isQualifiedName(node) && ts.isIdentifier(node.left)) {
-      let resolved = moduleGraph.resolveImport(
+    // Rename qualified names
+    if (ts.isQualifiedName(node)) {
+      const {qualifier, name} = resolveQualifiedName(
         currentModule,
-        node.left.text,
-        node.right.text,
+        moduleGraph,
+        node,
       );
-
-      if (resolved && resolved.module.primaryNamespaceName) {
-        // If the qualifier references a namespace export that will be exported at the top level, replace it with the "primary" namespace name.
-        return ts.updateQualifiedName(
-          node,
-          ts.createIdentifier(resolved.module.primaryNamespaceName),
-          node.right,
+      if (qualifier) {
+        return ts.createQualifiedName(
+          ts.createIdentifier(qualifier),
+          ts.createIdentifier(name),
         );
-      } else if (resolved && resolved.module.hasBinding(resolved.imported)) {
-        return ts.createIdentifier(resolved.module.getName(resolved.imported));
       } else {
-        return ts.updateQualifiedName(
-          node,
-          ts.createIdentifier(currentModule.getName(node.left.text)),
-          node.right,
-        );
+        return ts.createIdentifier(name);
       }
     }
 
@@ -497,4 +506,72 @@ function getNamespaceExportsAndAliases(
     return namespaceDeclarationAndAliases;
   }
   return null;
+}
+
+/** Recursively resolves potentially nested qualified names.
+ * We want to transoform deeply nested qualified names (e.g. foo.bar.baz)
+ * into something with a single qualifier, which might be renamed (barRenamed.baz).
+ * @example `foo.bar.baz` would be represented as:
+ *   {
+ *     kind: QualifiedName,
+ *     left: {
+ *       kind: QualifiedName,
+ *       left: { kind: Identifier, text: 'foo' },
+ *       right: { kind: Identifier, text: 'bar' }
+ *     },
+ *     right: { kind: Identifier, text: 'baz'}
+ *   }
+ */
+function resolveQualifiedName(
+  qualifiedNameModule: TSModule, // The module that contains the qualified name.
+  moduleGraph: TSModuleGraph,
+  node: any,
+  module?: ?TSModule, // When recursively resolving multi-part qualified names, this is the module where we should look for exports.
+): {|name: string, qualifier?: string, module: TSModule|} {
+  module = module ?? qualifiedNameModule;
+  const name: string = node.right.text;
+  let qualifier: ?string;
+  if (ts.isIdentifier(node.left)) {
+    qualifier = node.left.text;
+  } else {
+    ({qualifier, module} = ts.isIdentifier(node.left)
+      ? node.left.text
+      : resolveQualifiedName(
+          qualifiedNameModule,
+          moduleGraph,
+          node.left,
+          module,
+        ));
+  }
+
+  // TODO: add a test that hits this case: a deeply qualified name that terminates on a non-namespace export.
+  if (!qualifier) {
+    return {name, module};
+  }
+
+  const resolved =
+    qualifiedNameModule === module
+      ? moduleGraph.resolveImport(module, qualifier, name)
+      : moduleGraph.resolveExport(module, name);
+
+  if (resolved && resolved.module.primaryNamespaceName) {
+    // If the qualifier references a namespace export that will be exported at the top level, replace it with the "primary" namespace name.
+    return {
+      qualifier: resolved.module.primaryNamespaceName,
+      name,
+      module: resolved.module,
+    };
+  } else if (resolved && resolved.module.hasBinding(resolved.imported)) {
+    return {
+      name: resolved.module.getName(resolved.imported),
+      module: resolved.module,
+    };
+  } else {
+    // TODO: will this work for external namepsace names?
+    return {
+      qualifier: module.getName(qualifier),
+      name,
+      module: resolved?.module ?? module,
+    };
+  }
 }

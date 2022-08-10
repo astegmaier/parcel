@@ -31,3 +31,13 @@ export const namespaceClassDConsumer = new MyNamespaceRenamed.ClassD("index.ts -
 // Expected output:
 // export const namespaceAConsumer: typeof MyNamespace.a; <-- we snap to the primary namespace name, and use the exported name "a", not the internal name "_a2"
 // export const namespaceClassDConsumer: MyNamespace.ClassD;
+
+import { Level1Namespace } from "./nested/level1-exporter";
+export { Level2Namespace } from "./nested/level2-exporter";
+export * as Level3Namespace from "./nested/level3";
+
+export const level2AConsumer: typeof Level1Namespace.Level2Namespace.a = { level2A: "index.ts - level2AConsumer" };
+export const level3AConsumer: typeof Level1Namespace.Level2Namespace.Level3NamespaceInternal.a = { level3A: "index.ts - level3AConsumer" };
+// Expected output:
+// export const level2AConsumer: typeof Level2Namespace.a; <-- We can successfully flatten and shake Level1Namespace.
+// export const level3AConsumer: typeof Level3Namespace.a; <-- Level3NamespaceInternal gets renamed to Level3Namespace.

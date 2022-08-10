@@ -561,6 +561,9 @@ describe('typescript types', function () {
         type: 'js',
         assets: [
           'index.ts',
+          'level2-exporter.ts',
+          'level2.ts',
+          'level3.ts',
           'namespace-other-exporter.ts',
           'namespace-other.ts',
           'namespace.ts',

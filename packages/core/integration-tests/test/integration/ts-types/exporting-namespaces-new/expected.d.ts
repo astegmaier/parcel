@@ -73,8 +73,21 @@ export namespace MyNamespace {
     export { b as default };
 }
 export { MyNamespace as MyNamespaceAlias };
+export namespace Level3Namespace {
+    export const a: {
+        level3A: string;
+    };
+}
+export namespace Level2Namespace {
+    export const a: {
+        level2A: string;
+    };
+    export { Level3Namespace as Level3NamespaceInternal };
+}
 export const classAInstance: MyNamespace.ClassA;
 export const namespaceAConsumer: typeof MyNamespace.a;
 export const namespaceClassDConsumer: MyNamespace.ClassD;
+export const level2AConsumer: typeof Level2Namespace.a;
+export const level3AConsumer: typeof Level3Namespace.a;
 
 //# sourceMappingURL=types.d.ts.map
