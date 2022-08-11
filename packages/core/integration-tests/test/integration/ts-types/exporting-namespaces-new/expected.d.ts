@@ -28,6 +28,9 @@ declare class ClassD {
     otherClassD: string;
     constructor(otherClassD: string);
 }
+interface InterfaceA {
+    otherInterfaceA: string;
+}
 declare const _b1: {
     wildcardExportsB: string;
 };
@@ -70,6 +73,11 @@ export namespace MyNamespace {
     }
     export { _ClassD1 as ClassD };
     export const otherClassDConsumer: ClassD;
+    interface _InterfaceA1 {
+        namespaceInterfaceA: string;
+    }
+    export { type _InterfaceA1 as InterfaceA };
+    export type OtherInterfaceAAlias = InterfaceA;
     export { b as default };
 }
 export { MyNamespace as MyNamespaceAlias };

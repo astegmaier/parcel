@@ -4,7 +4,14 @@ import type {TSModuleGraph} from './TSModuleGraph';
 
 import ts from 'typescript';
 import nullthrows from 'nullthrows';
-import {getExportedName, isDeclaration, createImportSpecifier} from './utils';
+import {
+  getExportedName,
+  isDeclaration,
+  isTypeDeclaration,
+  createImportSpecifier,
+  createExportSpecifier,
+  updateExportSpecifier,
+} from './utils';
 
 export function shake(
   moduleGraph: TSModuleGraph,
@@ -114,18 +121,16 @@ export function shake(
             const newPropertyName =
               resolved.module.primaryNamespaceName ??
               resolved.module.getName(resolved.imported);
-            if (newPropertyName === exportSpecifier.name.text) {
-              // If no-renaming is needed, don't add a duplicate propertyName (e.g. "export { foo as foo }")
-              // prettier-ignore
-              // $FlowFixMe[incompatible-call]
-              // $FlowFixMe[extra-arg]
-              return ts.updateExportSpecifier(exportSpecifier, exportSpecifier.isTypeOnly, undefined, exportSpecifier.name);
-            }
-            // TODO: this has a 2 argument signature in TS 3.3 (flow definitions), but a 3 argument signature in recent versions of TS
-            // prettier-ignore
-            // $FlowFixMe[incompatible-call]
-            // $FlowFixMe[extra-arg]
-            return ts.updateExportSpecifier(exportSpecifier, exportSpecifier.isTypeOnly, ts.createIdentifier(newPropertyName), exportSpecifier.name);
+            return updateExportSpecifier(
+              ts,
+              exportSpecifier,
+              // If no-renaming is needed, don't add a duplicate propertyName (e.g. don't do "export { foo as foo }")
+              newPropertyName === exportSpecifier.name.text
+                ? undefined
+                : newPropertyName,
+              exportSpecifier.name,
+              exportSpecifier.isTypeOnly,
+            );
           });
           return ts.updateExportDeclaration(
             node,
@@ -158,11 +163,11 @@ export function shake(
             if (!allNamedExports.has(e.name)) {
               const imported = referencedModule.getName(e.imported);
               wildcardExportSpecifiers.push(
-                // TODO: this has a 2 argument signature in TS 3.3 (flow definitions), but a 3 argument signature in recent versions of TS
-                // prettier-ignore
-                // $FlowFixMe[incompatible-call]
-                // $FlowFixMe[extra-arg]
-                ts.createExportSpecifier(false, imported !== e.name ? imported : undefined, e.name),
+                createExportSpecifier(
+                  ts,
+                  imported !== e.name ? imported : undefined,
+                  e.name,
+                ),
               );
             }
           }
@@ -210,11 +215,11 @@ export function shake(
       // For namespace modules, transform "export default x" to "export {x as default}"
       if (currentModule.isTopLevelNamespaceExport && !node.isExportEquals) {
         const namedExport = ts.createNamedExports([
-          // TODO: this has a 2 argument signature in TS 3.3 (flow definitions), but a 3 argument signature in recent versions of TS
-          // prettier-ignore
-          // $FlowFixMe[incompatible-call]
-          // $FlowFixMe[extra-arg]
-          ts.createExportSpecifier(false, ts.createIdentifier(currentModule.getName(node.expression.text)), ts.createIdentifier('default')),
+          createExportSpecifier(
+            ts,
+            currentModule.getName(node.expression.text),
+            'default',
+          ),
         ]);
         // TODO: flow definition does not include "boolean" as 3rd parameter, but ts-ast-viewer suggests that it should.
         return ts.createExportDeclaration(undefined, undefined, namedExport);
@@ -252,10 +257,12 @@ export function shake(
             m => m.kind !== ts.SyntaxKind.ExportKeyword,
           );
           const renamedExports = ts.createNamedExports([
-            // TODO: this has a 2 argument signature in TS 3.3 (flow definitions), but a 3 argument signature in recent versions of TS
-            // $FlowFixMe[incompatible-call]
-            // $FlowFixMe[extra-arg]
-            ts.createExportSpecifier(false, newName, name),
+            createExportSpecifier(
+              ts,
+              newName,
+              name,
+              isTypeDeclaration(ts, node),
+            ),
           ]);
           return [
             ts.visitEachChild(node, visit, context),
@@ -311,11 +318,7 @@ export function shake(
           );
           const renamedExports = ts.createNamedExports(
             node.declarationList.declarations.map(({name}) =>
-              // TODO: this has a 2 argument signature in TS 3.3 (flow definitions), but a 3 argument signature in recent versions of TS
-              // prettier-ignore
-              // $FlowFixMe[incompatible-call]
-              // $FlowFixMe[extra-arg]
-              ts.createExportSpecifier(false, currentModule.getName(name.text), name),
+              createExportSpecifier(ts, currentModule.getName(name.text), name),
             ),
           );
           return [
@@ -492,11 +495,7 @@ function getNamespaceExportsAndAliases(
             undefined,
             undefined,
             ts.createNamedExports([
-              // TODO: this has a 2 argument signature in TS 3.3 (flow definitions), but a 3 argument signature in recent versions of TS
-              // prettier-ignore
-              // $FlowFixMe[incompatible-call]
-              // $FlowFixMe[extra-arg]
-              ts.createExportSpecifier(false, primaryNamespaceName, namespaceName),
+              createExportSpecifier(ts, primaryNamespaceName, namespaceName),
             ]),
             undefined,
           ),
@@ -508,7 +507,8 @@ function getNamespaceExportsAndAliases(
   return null;
 }
 
-/** Recursively resolves potentially nested qualified names.
+/**
+ * Recursively resolves potentially nested qualified names.
  * We want to transoform deeply nested qualified names (e.g. foo.bar.baz)
  * into something with a single qualifier, which might be renamed (barRenamed.baz).
  * @example `foo.bar.baz` would be represented as:

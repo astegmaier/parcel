@@ -11,3 +11,7 @@ export const unused = { otherUnused: "other.ts - unused" }; // This is unused an
 export class ClassD {
     constructor(public otherClassD: string) {}
 }
+
+export interface InterfaceA {
+    otherInterfaceA: string;
+};

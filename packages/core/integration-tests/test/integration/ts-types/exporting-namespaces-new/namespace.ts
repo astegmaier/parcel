@@ -1,6 +1,6 @@
 import { MyInternalNamespace } from "./namespace-internal-exporter";
 import { MyOtherNamespace } from "./namespace-other-exporter";
-import { a as aImportedAlias, ClassD as OtherClassD } from "./other";
+import { a as aImportedAlias, ClassD as OtherClassD, InterfaceA as OtherInterfaceA } from "./other";
 
 export const a = { namespaceA: "namespace.ts - a" };
 // Expected output:
@@ -60,6 +60,17 @@ export const otherClassDConsumer = new OtherClassD(
 // }
 // export { _ClassD1 as ClassD }; <-- we need to preserve the original export name from the alias.
 // export const otherClassDConsumer: ClassD;
+
+export interface InterfaceA {
+    namespaceInterfaceA: string;
+}
+export type OtherInterfaceAAlias = OtherInterfaceA;
+// Expected output:
+// interface _InterfaceA1 { <-- because "InterfaceA" conflicts with the top-level interface declaration from "other.ts" that's used in this namespace, we need to add a disambiguator.
+//   namespaceInterfaceA: string;
+// }
+// export { type _InterfaceA1 as InterfaceA }; <-- we need to preserve the original export name for this alias, with a "type" modifier.
+// export type OtherInterfaceAAlias = InterfaceA;
 
 export default b;
 // Expected output:
