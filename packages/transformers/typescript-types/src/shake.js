@@ -534,14 +534,12 @@ function resolveQualifiedName(
   if (ts.isIdentifier(node.left)) {
     qualifier = node.left.text;
   } else {
-    ({qualifier, module} = ts.isIdentifier(node.left)
-      ? node.left.text
-      : resolveQualifiedName(
-          qualifiedNameModule,
-          moduleGraph,
-          node.left,
-          module,
-        ));
+    ({qualifier, module} = resolveQualifiedName(
+      qualifiedNameModule,
+      moduleGraph,
+      node.left,
+      module,
+    ));
   }
 
   // TODO: add a test that hits this case: a deeply qualified name that terminates on a non-namespace export.
