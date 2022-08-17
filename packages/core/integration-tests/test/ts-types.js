@@ -547,8 +547,7 @@ describe('typescript types', function () {
     assert.equal(dist, expected);
   });
 
-  // eslint-disable-next-line mocha/no-exclusive-tests
-  it.only('should generate ts declarations with namespace exports (new)', async function () {
+  it('should generate ts declarations with namespace exports (new)', async function () {
     let b = await bundle(
       path.join(
         __dirname,
